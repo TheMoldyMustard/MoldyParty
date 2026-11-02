@@ -122,10 +122,55 @@ describe('advanceRoleReveal', () => {
 })
 
 describe('built-in packs', () => {
-  it('ships Animals, Places, and Objects with usable hints', () => {
-    expect(builtInPacks.map((pack) => pack.packName)).toEqual(['Animals', 'Places', 'Objects'])
+  it('ships the permanent categories with usable hints', () => {
+    expect(builtInPacks.map((pack) => pack.packName)).toEqual([
+      'Animals',
+      'Places',
+      'Objects',
+      'College Programs in PUP',
+      'IT Terms',
+      'Nintendo Games',
+    ])
     expect(builtInPacks.every((pack) => pack.items.length >= 8)).toBe(true)
     expect(builtInPacks.every((pack) => pack.items.every((item) => item.word && item.hint))).toBe(true)
+  })
+
+  it('keeps every supplied randomized hint in the new permanent categories', () => {
+    const permanentPackIds = [
+      'builtin-college-programs-pup',
+      'builtin-it-terms',
+      'builtin-nintendo-games',
+    ]
+    const newPacks = permanentPackIds.map((id) => builtInPacks.find((pack) => pack.id === id))
+
+    expect(newPacks.map((pack) => ({
+      packName: pack?.packName,
+      category: pack?.category,
+      source: pack?.source,
+      itemCount: pack?.items.length,
+    }))).toEqual([
+      { packName: 'College Programs in PUP', category: 'Custom', source: 'builtIn', itemCount: 40 },
+      { packName: 'IT Terms', category: 'Custom', source: 'builtIn', itemCount: 25 },
+      { packName: 'Nintendo Games', category: 'Custom', source: 'builtIn', itemCount: 40 },
+    ])
+    expect(newPacks.every((pack) => pack?.items.every(
+      (item) => item.hints?.length === 5 && item.hint === item.hints[0],
+    ))).toBe(true)
+
+    const canonicalContent = newPacks.map((pack) => ({
+      id: pack?.id,
+      packName: pack?.packName,
+      category: pack?.category,
+      source: pack?.source,
+      items: pack?.items.map(({ word, hints }) => ({ word, hints })),
+    }))
+    const serializedContent = JSON.stringify(canonicalContent)
+    const hash = Array.from(serializedContent).reduce((value, character) => {
+      return Math.imul(value ^ character.charCodeAt(0), 16_777_619)
+    }, 2_166_136_261) >>> 0
+    const contentFingerprint = `${serializedContent.length}:${hash.toString(16).padStart(8, '0')}`
+
+    expect(contentFingerprint).toBe('9330:bccead28')
   })
 })
 
