@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+:root {
+  font-family: Inter, ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+  color: #fff9e8;
+  background: #180b20;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  --ink: #24112f;
+  --cream: #fff5d7;
+  --lime: #c7f36b;
+  --coral: #ff6f61;
+  --plum: #5b2a6e;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at 15% 12%, rgb(146 74 164 / 35%), transparent 28rem),
+    radial-gradient(circle at 85% 78%, rgb(199 243 107 / 12%), transparent 24rem),
+    #180b20;
+}
+
+button, input, select, textarea { font: inherit; }
+button { min-height: 48px; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 3px solid var(--lime);
+  outline-offset: 3px;
+}
+
+.app-shell {
+  width: min(100% - 2rem, 54rem);
+  min-height: 100dvh;
+  margin-inline: auto;
+  padding: max(2rem, env(safe-area-inset-top)) 0 max(1.5rem, env(safe-area-inset-bottom));
+  display: grid;
+  align-content: center;
+  gap: 2rem;
+}
+
+.brand-lockup { max-width: 38rem; }
+.eyebrow, .pill {
+  color: var(--lime);
+  font-size: .78rem;
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+h1, h2, p { margin: 0; }
+h1 { font-size: clamp(3rem, 12vw, 6.5rem); line-height: .9; letter-spacing: -.07em; }
+.brand-lockup p { margin-top: 1rem; color: #d9c8df; font-size: clamp(1rem, 3vw, 1.25rem); }
+
+.game-card {
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(9rem, .75fr) minmax(0, 1.25fr);
+  min-height: 22rem;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 2rem;
+  color: var(--ink);
+  background: var(--cream);
+  box-shadow: 0 2rem 5rem rgb(0 0 0 / 30%);
+}
+.game-card__art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: linear-gradient(145deg, var(--lime), #89cf55);
+}
+.game-card__eye { z-index: 1; font-size: clamp(4rem, 15vw, 8rem); color: var(--ink); }
+.spore { position: absolute; border-radius: 999px; background: rgb(255 245 215 / 45%); }
+.spore--one { width: 8rem; height: 8rem; inset: -2rem auto auto -2rem; }
+.spore--two { width: 4rem; height: 4rem; inset: auto -1rem 2rem auto; }
+.game-card__content { padding: clamp(1.5rem, 6vw, 3.5rem); display: flex; flex-direction: column; justify-content: center; align-items: flex-start; }
+.game-card h2 { margin-top: .65rem; font-size: clamp(2.5rem, 8vw, 4.75rem); line-height: .95; letter-spacing: -.05em; }
+.game-card p { margin-top: 1rem; color: #5e4d62; font-size: 1.1rem; }
+.game-card button {
+  margin-top: 2rem;
+  padding: .85rem 1.1rem;
+  border: 0;
+  border-radius: 999px;
+  color: white;
+  background: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+.game-card button:hover { background: var(--plum); transform: translateY(-1px); }
+footer { color: #a88daf; text-align: center; font-size: .85rem; }
+
+@media (max-width: 560px) {
+  .app-shell { align-content: start; }
+  .game-card { grid-template-columns: 1fr; }
+  .game-card__art { min-height: 10rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}
