@@ -1,4 +1,11 @@
-import type { GameSetupInput, GameState, SetupErrors } from './types'
+import type {
+  GameSetupInput,
+  GameState,
+  Player,
+  SetupErrors,
+  VoteRecord,
+  VoteResult,
+} from './types'
 
 const MIN_PLAYERS = 3
 
@@ -96,5 +103,65 @@ export function advanceRoleReveal(state: GameState): GameState {
     phase: isLastPlayer ? 'DISCUSSION' : 'ROLE_REVEAL',
     currentRevealIndex: isLastPlayer ? state.currentRevealIndex : state.currentRevealIndex + 1,
     isRoleVisible: false,
+  }
+}
+
+export function calculateVoteResult(players: Player[], votes: VoteRecord[]): VoteResult {
+  const counts = Object.fromEntries(players.map((player) => [player.id, 0]))
+  for (const vote of votes) {
+    if (vote.targetId !== null && vote.targetId in counts) {
+      counts[vote.targetId] += 1
+    }
+  }
+
+  const highestCount = Math.max(0, ...Object.values(counts))
+  const topCandidateIds = highestCount === 0
+    ? []
+    : players.filter((player) => counts[player.id] === highestCount).map((player) => player.id)
+  const isTie = topCandidateIds.length > 1
+
+  return {
+    counts,
+    topCandidateIds,
+    eliminatedPlayerId: topCandidateIds.length === 1 ? topCandidateIds[0] : null,
+    isTie,
+  }
+}
+
+export function startVoting(state: GameState): GameState {
+  if (state.phase !== 'DISCUSSION') {
+    return state
+  }
+  return {
+    ...state,
+    phase: 'VOTING',
+    currentVoterIndex: 0,
+    votes: [],
+    voteResult: null,
+  }
+}
+
+export function recordVote(state: GameState, targetId: string | null): GameState {
+  if (state.phase !== 'VOTING') {
+    return state
+  }
+
+  const voter = state.players[state.currentVoterIndex]
+  if (targetId === voter.id) {
+    throw new Error('You cannot vote for yourself.')
+  }
+  if (targetId !== null && !state.players.some((player) => player.id === targetId)) {
+    throw new Error('Choose a player in this round.')
+  }
+
+  const votes = [...state.votes, { voterId: voter.id, targetId }]
+  const isLastVoter = state.currentVoterIndex === state.players.length - 1
+
+  return {
+    ...state,
+    phase: isLastVoter ? 'GAME_OVER' : 'VOTING',
+    currentVoterIndex: isLastVoter ? state.currentVoterIndex : state.currentVoterIndex + 1,
+    votes,
+    voteResult: isLastVoter ? calculateVoteResult(state.players, votes) : null,
   }
 }

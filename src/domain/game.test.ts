@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { builtInPacks } from './builtInPacks'
-import { advanceRoleReveal, createRound, validateSetup } from './game'
+import {
+  advanceRoleReveal,
+  calculateVoteResult,
+  createRound,
+  recordVote,
+  startVoting,
+  validateSetup,
+} from './game'
+import type { Player, VoteRecord } from './types'
 
 const validSetup = {
   playerNames: ['Alex', 'Blair', 'Casey', 'Devon'],
@@ -101,5 +109,91 @@ describe('built-in packs', () => {
     expect(builtInPacks.map((pack) => pack.packName)).toEqual(['Animals', 'Places', 'Objects'])
     expect(builtInPacks.every((pack) => pack.items.length >= 8)).toBe(true)
     expect(builtInPacks.every((pack) => pack.items.every((item) => item.word && item.hint))).toBe(true)
+  })
+})
+
+const votingPlayers: Player[] = [
+  { id: 'a', name: 'Alex', role: 'INNOCENT', hasViewedRole: true },
+  { id: 'b', name: 'Blair', role: 'IMPOSTOR', hasViewedRole: true },
+  { id: 'c', name: 'Casey', role: 'INNOCENT', hasViewedRole: true },
+]
+
+describe('calculateVoteResult', () => {
+  it('eliminates the single player with the most votes', () => {
+    const votes: VoteRecord[] = [
+      { voterId: 'a', targetId: 'b' },
+      { voterId: 'b', targetId: 'c' },
+      { voterId: 'c', targetId: 'b' },
+    ]
+
+    expect(calculateVoteResult(votingPlayers, votes)).toEqual({
+      counts: { a: 0, b: 2, c: 1 },
+      topCandidateIds: ['b'],
+      eliminatedPlayerId: 'b',
+      isTie: false,
+    })
+  })
+
+  it('does not count skipped votes and eliminates nobody when all skip', () => {
+    const votes = votingPlayers.map((player) => ({ voterId: player.id, targetId: null }))
+
+    expect(calculateVoteResult(votingPlayers, votes)).toEqual({
+      counts: { a: 0, b: 0, c: 0 },
+      topCandidateIds: [],
+      eliminatedPlayerId: null,
+      isTie: false,
+    })
+  })
+
+  it('reports every tied leader and eliminates nobody', () => {
+    const votes: VoteRecord[] = [
+      { voterId: 'a', targetId: 'b' },
+      { voterId: 'b', targetId: 'a' },
+      { voterId: 'c', targetId: null },
+    ]
+
+    expect(calculateVoteResult(votingPlayers, votes)).toEqual({
+      counts: { a: 1, b: 1, c: 0 },
+      topCandidateIds: ['a', 'b'],
+      eliminatedPlayerId: null,
+      isTie: true,
+    })
+  })
+})
+
+describe('voting lifecycle', () => {
+  function discussionState() {
+    return {
+      ...createRound(validSetup, () => 0),
+      phase: 'DISCUSSION' as const,
+      players: votingPlayers,
+    }
+  }
+
+  it('starts a fresh sequential ballot from discussion', () => {
+    const state = startVoting(discussionState())
+    expect(state).toMatchObject({ phase: 'VOTING', currentVoterIndex: 0, votes: [] })
+  })
+
+  it('rejects a self-vote and a target outside the round', () => {
+    const state = startVoting(discussionState())
+    expect(() => recordVote(state, 'a')).toThrow('You cannot vote for yourself.')
+    expect(() => recordVote(state, 'missing')).toThrow('Choose a player in this round.')
+  })
+
+  it('records skipped votes and moves to the next voter', () => {
+    const state = recordVote(startVoting(discussionState()), null)
+    expect(state.currentVoterIndex).toBe(1)
+    expect(state.votes).toEqual([{ voterId: 'a', targetId: null }])
+  })
+
+  it('calculates the result and moves to game over after the final voter', () => {
+    let state = startVoting(discussionState())
+    state = recordVote(state, 'b')
+    state = recordVote(state, 'c')
+    state = recordVote(state, 'b')
+
+    expect(state.phase).toBe('GAME_OVER')
+    expect(state.voteResult).toMatchObject({ eliminatedPlayerId: 'b', isTie: false })
   })
 })
