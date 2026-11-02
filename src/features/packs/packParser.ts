@@ -26,11 +26,11 @@ function normalizeItems(value: unknown): WordItem[] | string {
     }
 
     if ('hints' in candidate) {
-      if (!Array.isArray(candidate.hints) || candidate.hints.length !== 5) {
-        return 'Each hints array must contain exactly 5 hints.'
+      if (!Array.isArray(candidate.hints) || candidate.hints.length === 0) {
+        return 'Each hints array needs at least 1 hint.'
       }
       if (candidate.hints.some((hint) => typeof hint !== 'string' || !hint.trim())) {
-        return 'All 5 hints must be non-empty strings.'
+        return 'All hints must be non-empty strings.'
       }
       const hints = candidate.hints.map((hint) => (hint as string).trim())
       items.push({ word, hint: hints[0], hints })

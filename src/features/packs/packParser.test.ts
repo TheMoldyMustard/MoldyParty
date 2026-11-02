@@ -62,9 +62,9 @@ describe('parseWordPackJson', () => {
     [JSON.stringify({ packName: 'Dupes', category: 'Custom', items: [
       { word: 'Moon', hint: 'One' }, { word: ' moon ', hint: 'Two' },
     ] }), 'Words must be unique within a pack.'],
-    [JSON.stringify({ packName: 'Too Few', category: 'Custom', items: [
-      { word: 'Moon', hints: ['Orbit', 'Night'] },
-    ] }), 'Each hints array must contain exactly 5 hints.'],
+    [JSON.stringify({ packName: 'No Hints', category: 'Custom', items: [
+      { word: 'Moon', hints: [] },
+    ] }), 'Each hints array needs at least 1 hint.'],
   ])('rejects invalid input with a useful message', (text, message) => {
     expect(parseWordPackJson(text)).toEqual({ ok: false, error: message })
   })

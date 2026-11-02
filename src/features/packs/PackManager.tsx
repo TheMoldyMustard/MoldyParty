@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react'
 import type { WordItem, WordPack } from '../../domain/types'
 import { packRepository, type PackRepository } from './packDb'
 import { parseWordPackJson, serializeWordPack } from './packParser'
+import { parseManualHints } from './manualHints'
 import AiPromptHelper from './AiPromptHelper'
 
 interface PackManagerProps {
@@ -51,13 +52,12 @@ export default function PackManager({
   async function saveManualPack() {
     const normalizedItems = items
       .map((item) => {
-        const hint = item.hint.trim()
+        const hints = parseManualHints(item.hint)
+        const hint = hints[0] ?? ''
         return {
           word: item.word.trim(),
           hint,
-          ...(item.hints?.length ? {
-            hints: item.hints.map((storedHint, index) => index === 0 ? hint : storedHint.trim()),
-          } : {}),
+          ...(hints.length > 1 ? { hints } : {}),
         }
       })
       .filter((item) => item.word)
@@ -108,7 +108,10 @@ export default function PackManager({
     setMode('manual')
     setEditingPackId(pack.id)
     setPackName(pack.packName)
-    setItems(pack.items.map((item) => ({ ...item })))
+    setItems(pack.items.map((item) => ({
+      ...item,
+      hint: item.hints?.join(', ') ?? item.hint,
+    })))
     setMessage('')
   }
 
@@ -143,10 +146,17 @@ export default function PackManager({
       {mode === 'manual' ? (
         <div className="stack">
           <label>Pack name<input value={packName} onChange={(event) => setPackName(event.target.value)} /></label>
+          <aside className="hint-format-guide" role="note">
+            <strong>Hint input guide</strong>
+            <p>Enter one hint, or several separated by commas. Parentheses, square brackets, and quoted tuple values are accepted.</p>
+            <code>Creation, Journey, Night</code>
+            <code>(Creation, Journey, Night)</code>
+            <small>When multiple hints are entered, one hint is chosen randomly at the start of each round.</small>
+          </aside>
           {items.map((item, index) => (
             <div className="word-row" key={index}>
               <label>Word {index + 1}<input value={item.word} onChange={(event) => updateItem(index, 'word', event.target.value)} /></label>
-              <label>Hint {index + 1}<input value={item.hint} onChange={(event) => updateItem(index, 'hint', event.target.value)} /></label>
+              <label>Hints {index + 1}<input aria-label={`Hint ${index + 1}`} placeholder="Creation, Journey, Night" value={item.hint} onChange={(event) => updateItem(index, 'hint', event.target.value)} /></label>
               {items.length > 1 && <button className="icon-button" aria-label={`Remove word ${index + 1}`} onClick={() => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}>×</button>}
             </div>
           ))}

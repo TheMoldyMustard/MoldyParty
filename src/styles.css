@@ -208,6 +208,9 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
 .stack { display: grid; gap: 1rem; }
 .word-row { display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: .7rem; }
 .word-row label { display: grid; gap: .4rem; color: #c9b8ce; font-size: .8rem; font-weight: 800; }
+.hint-format-guide { display: grid; gap: .45rem; padding: 1rem; border: 1px solid rgb(199 243 107 / 24%); border-radius: 1rem; color: #d8cadc; background: rgb(199 243 107 / 7%); }
+.hint-format-guide p, .hint-format-guide small { color: #ad97b4; font-size: .82rem; }
+.hint-format-guide code { width: fit-content; padding: .25rem .45rem; border-radius: .4rem; color: var(--lime); background: #24112f; font-size: .78rem; }
 .button-row { display: flex; flex-wrap: wrap; gap: .65rem; }
 .button-row--compact button { min-height: 2.5rem; border: 0; border-radius: 999px; padding: .45rem .75rem; color: #d8cadc; background: rgb(255 255 255 / 8%); cursor: pointer; }
 .button-row--compact button.danger { color: #ff978d; }

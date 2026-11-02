@@ -31,6 +31,27 @@ describe('PackManager', () => {
     expect(await screen.findByText('Pack saved on this device.')).toBeInTheDocument()
   })
 
+  it('saves comma-separated manual hints as a randomized hint pool', async () => {
+    const user = userEvent.setup()
+    const repository = fakeRepository()
+    render(<PackManager repository={repository} />)
+
+    expect(screen.getByRole('note')).toHaveTextContent('Creation, Journey, Night')
+    expect(screen.getByRole('note')).toHaveTextContent('one hint is chosen randomly')
+    await user.type(screen.getByLabelText('Pack name'), 'Games')
+    await user.type(screen.getByLabelText('Word 1'), 'Minecraft')
+    await user.type(screen.getByLabelText('Hint 1'), '(Creation, Journey, Night)')
+    await user.click(screen.getByRole('button', { name: 'Save pack' }))
+
+    expect(repository.put).toHaveBeenCalledWith(expect.objectContaining({
+      items: [{
+        word: 'Minecraft',
+        hint: 'Creation',
+        hints: ['Creation', 'Journey', 'Night'],
+      }],
+    }))
+  })
+
   it('validates pasted JSON as the user types', async () => {
     const user = userEvent.setup()
     render(<PackManager repository={fakeRepository()} />)
