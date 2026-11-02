@@ -3,6 +3,7 @@ import type { ChangeEvent } from 'react'
 import type { WordItem, WordPack } from '../../domain/types'
 import { packRepository, type PackRepository } from './packDb'
 import { parseWordPackJson, serializeWordPack } from './packParser'
+import AiPromptHelper from './AiPromptHelper'
 
 interface PackManagerProps {
   repository?: PackRepository
@@ -156,6 +157,7 @@ export default function PackManager({
           </article>
         ))}
       </div>
+      <AiPromptHelper />
     </section>
   )
 }

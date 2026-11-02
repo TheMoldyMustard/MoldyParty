@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import InstallPrompt from './components/InstallPrompt'
+import UpdatePrompt from './components/UpdatePrompt'
 import DiscussionScreen from './features/game/DiscussionScreen'
 import GameOverScreen from './features/game/GameOverScreen'
 import LobbyScreen from './features/game/LobbyScreen'
@@ -9,7 +11,7 @@ import { useGameStore } from './store/gameStore'
 
 type AppView = 'home' | 'lobby' | 'packs'
 
-function App() {
+function AppContent() {
   const [view, setView] = useState<AppView>('home')
   const game = useGameStore((state) => state.game)
   const changeCategory = useGameStore((state) => state.changeCategory)
@@ -51,6 +53,10 @@ function App() {
       <footer>Built for 3+ suspicious friends</footer>
     </main>
   )
+}
+
+function App() {
+  return <><AppContent /><InstallPrompt /><UpdatePrompt /></>
 }
 
 export default App

@@ -218,6 +218,15 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
 .saved-pack { display: grid; gap: .75rem; padding: 1rem; border: 1px solid rgb(255 255 255 / 12%); border-radius: 1rem; background: #24112f; }
 .saved-pack > div:first-child { display: flex; justify-content: space-between; }
 .saved-pack span, .saved-pack details { color: #a891b0; }
+.ai-helper { position: relative; display: grid; grid-template-columns: 1.4fr 1fr auto; align-items: end; gap: 1rem; margin-top: 2rem; padding: 1.4rem; border: 1px solid rgb(199 243 107 / 24%); border-radius: 1.25rem; background: linear-gradient(135deg, rgb(199 243 107 / 10%), rgb(91 42 110 / 18%)); }
+.ai-helper h3 { margin: .35rem 0; font-size: 1.25rem; }
+.ai-helper p { color: #ad97b4; font-size: .9rem; }
+.ai-helper label { display: grid; gap: .4rem; color: #c9b8ce; font-size: .8rem; font-weight: 800; }
+.ai-helper input { min-height: 3rem; border: 1px solid rgb(255 255 255 / 15%); border-radius: .8rem; padding: .6rem .8rem; color: white; background: #24112f; }
+.copy-status { position: absolute; inset: auto 1.4rem .35rem auto; color: var(--lime); font-size: .72rem; font-weight: 850; }
+.pwa-toast { position: fixed; z-index: 20; inset: auto max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) auto; width: min(calc(100% - 2rem), 28rem); display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: .75rem; padding: 1rem; border: 1px solid rgb(255 255 255 / 18%); border-radius: 1.2rem; color: white; background: rgb(36 17 47 / 96%); box-shadow: 0 1rem 4rem rgb(0 0 0 / 45%); backdrop-filter: blur(18px); }
+.pwa-toast > div { display: grid; gap: .15rem; }
+.pwa-toast span { color: #bca7c4; font-size: .78rem; }
 
 @media (min-width: 800px) {
   .setup-layout { grid-template-columns: 1fr 1fr; }
@@ -227,5 +236,8 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
   .category-grid { grid-template-columns: repeat(2, 1fr); }
   .rule-grid, .reveal-summary { grid-template-columns: 1fr; }
   .word-row { grid-template-columns: 1fr; }
+  .ai-helper { grid-template-columns: 1fr; align-items: stretch; }
+  .copy-status { position: static; }
+  .pwa-toast { inset-inline: 1rem; width: auto; }
   .section-heading { align-items: flex-start; }
 }
