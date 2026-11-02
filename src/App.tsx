@@ -1,4 +1,31 @@
+import { useState } from 'react'
+import DiscussionScreen from './features/game/DiscussionScreen'
+import GameOverScreen from './features/game/GameOverScreen'
+import LobbyScreen from './features/game/LobbyScreen'
+import RoleRevealScreen from './features/game/RoleRevealScreen'
+import VotingScreen from './features/game/VotingScreen'
+import PackManager from './features/packs/PackManager'
+import { useGameStore } from './store/gameStore'
+
+type AppView = 'home' | 'lobby' | 'packs'
+
 function App() {
+  const [view, setView] = useState<AppView>('home')
+  const game = useGameStore((state) => state.game)
+  const changeCategory = useGameStore((state) => state.changeCategory)
+  const returnToLobby = useGameStore((state) => state.returnToLobby)
+
+  if (game?.phase === 'ROLE_REVEAL') return <RoleRevealScreen key={game.currentRevealIndex} />
+  if (game?.phase === 'DISCUSSION') return <DiscussionScreen />
+  if (game?.phase === 'VOTING') return <VotingScreen />
+  if (game?.phase === 'GAME_OVER') return <GameOverScreen
+    onChangeCategory={() => { changeCategory(); setView('lobby') }}
+    onReturnToLobby={() => { returnToLobby(); setView('home') }}
+  />
+
+  if (view === 'lobby') return <LobbyScreen onBack={() => setView('home')} onManagePacks={() => setView('packs')} />
+  if (view === 'packs') return <main className="screen"><nav className="topbar"><button className="text-button" onClick={() => setView('lobby')}>← Back to setup</button></nav><PackManager /></main>
+
   return (
     <main className="app-shell">
       <header className="brand-lockup">
@@ -17,7 +44,7 @@ function App() {
           <span className="pill">Launch game</span>
           <h2 id="impostor-title">Impostor</h2>
           <p>Find the impostors before they blend in.</p>
-          <button type="button">Set up a round <span aria-hidden="true">→</span></button>
+          <button type="button" onClick={() => setView('lobby')}>Set up a round <span aria-hidden="true">→</span></button>
         </div>
       </section>
 

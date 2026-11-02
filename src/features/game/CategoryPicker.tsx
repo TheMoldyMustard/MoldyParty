@@ -1,0 +1,29 @@
+import type { WordPack } from '../../domain/types'
+
+interface CategoryPickerProps {
+  packs: WordPack[]
+  selectedId: string
+  onSelect: (id: string) => void
+  onManagePacks: () => void
+}
+
+export default function CategoryPicker({ packs, selectedId, onSelect, onManagePacks }: CategoryPickerProps) {
+  return (
+    <section className="setup-section" aria-labelledby="category-title">
+      <div className="section-heading">
+        <div><span className="step-number">02</span><h2 id="category-title">Pick a category</h2></div>
+        <button className="text-button" type="button" onClick={onManagePacks}>Manage custom packs</button>
+      </div>
+      <div className="category-grid">
+        {packs.map((pack) => (
+          <label className={`category-option ${selectedId === pack.id ? 'category-option--selected' : ''}`} key={pack.id}>
+            <input type="radio" name="category" value={pack.id} checked={selectedId === pack.id} onChange={() => onSelect(pack.id)} />
+            <span className="category-icon" aria-hidden="true">{pack.source === 'custom' ? '✦' : pack.packName === 'Animals' ? '◌' : pack.packName === 'Places' ? '⌂' : '◆'}</span>
+            <strong>{pack.packName}</strong>
+            <small>{pack.items.length} words</small>
+          </label>
+        ))}
+      </div>
+    </section>
+  )
+}
