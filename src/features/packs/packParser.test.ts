@@ -38,6 +38,22 @@ describe('parseWordPackJson', () => {
     })
   })
 
+  it('parses five one-word hints while retaining a legacy primary hint', () => {
+    const hints = ['Orbit', 'Night', 'Tide', 'Silver', 'Distant']
+    const result = parseWordPackJson(JSON.stringify({
+      packName: 'Space',
+      category: 'Custom',
+      items: [{ word: 'Moon', hints }],
+    }))
+
+    expect(result).toEqual({
+      ok: true,
+      pack: expect.objectContaining({
+        items: [{ word: 'Moon', hint: 'Orbit', hints }],
+      }),
+    })
+  })
+
   it.each([
     ['', 'Paste some JSON to continue.'],
     ['{oops', 'That is not valid JSON.'],
@@ -46,6 +62,9 @@ describe('parseWordPackJson', () => {
     [JSON.stringify({ packName: 'Dupes', category: 'Custom', items: [
       { word: 'Moon', hint: 'One' }, { word: ' moon ', hint: 'Two' },
     ] }), 'Words must be unique within a pack.'],
+    [JSON.stringify({ packName: 'Too Few', category: 'Custom', items: [
+      { word: 'Moon', hints: ['Orbit', 'Night'] },
+    ] }), 'Each hints array must contain exactly 5 hints.'],
   ])('rejects invalid input with a useful message', (text, message) => {
     expect(parseWordPackJson(text)).toEqual({ ok: false, error: message })
   })
@@ -67,5 +86,18 @@ describe('serializeWordPack', () => {
       category: 'Custom',
       items: [{ word: 'Moon', hint: 'Orbit' }],
     })
+  })
+
+  it('exports all five hints when a word has a hint pool', () => {
+    const hints = ['Orbit', 'Night', 'Tide', 'Silver', 'Distant']
+    const result = JSON.parse(serializeWordPack({
+      id: 'local-id',
+      packName: 'Space',
+      category: 'Custom',
+      source: 'custom',
+      items: [{ word: 'Moon', hint: hints[0], hints }],
+    }))
+
+    expect(result.items).toEqual([{ word: 'Moon', hints }])
   })
 })

@@ -11,6 +11,7 @@ export interface Player {
 export interface WordItem {
   word: string
   hint: string
+  hints?: string[]
 }
 
 export interface WordPack {

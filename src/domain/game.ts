@@ -59,6 +59,8 @@ export function createRound(input: GameSetupInput, random: () => number = Math.r
     Math.floor(random() * input.pack.items.length),
   )
   const selectedItem = input.pack.items[wordIndex]
+  const hintPool = selectedItem.hints?.length ? selectedItem.hints : [selectedItem.hint]
+  const hintIndex = Math.min(hintPool.length - 1, Math.floor(random() * hintPool.length))
   const impostorIndexes = new Set(
     shuffledIndexes(input.playerNames.length, random).slice(0, input.impostorCount),
   )
@@ -76,7 +78,7 @@ export function createRound(input: GameSetupInput, random: () => number = Math.r
     selectedPackId: input.pack.id,
     selectedPackName: input.pack.packName,
     currentWord: selectedItem.word,
-    currentHint: selectedItem.hint,
+    currentHint: hintPool[hintIndex],
     hintsEnabled: input.hintsEnabled,
     discussionDurationSeconds: input.discussionDurationSeconds,
     currentRevealIndex: 0,

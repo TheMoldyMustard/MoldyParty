@@ -71,6 +71,23 @@ describe('createRound', () => {
     expect(state.hintsEnabled).toBe(false)
   })
 
+  it('randomly selects one hint from a five-hint pool', () => {
+    const randomValues = [0, 0.6, 0, 0, 0]
+    const state = createRound({
+      ...validSetup,
+      pack: {
+        ...validSetup.pack,
+        items: [{
+          word: 'Moon',
+          hint: 'Orbit',
+          hints: ['Orbit', 'Night', 'Tide', 'Silver', 'Distant'],
+        }],
+      },
+    }, () => randomValues.shift() ?? 0)
+
+    expect(state.currentHint).toBe('Silver')
+  })
+
   it('refuses invalid setup rather than producing a partial round', () => {
     expect(() => createRound({ ...validSetup, playerNames: ['Alex', 'Blair'] })).toThrow(
       'Add at least 3 players.',

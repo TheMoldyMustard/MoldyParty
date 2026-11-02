@@ -17,15 +17,30 @@ function normalizeItems(value: unknown): WordItem[] | string {
 
   const items: WordItem[] = []
   for (const candidate of value) {
-    if (!isRecord(candidate) || typeof candidate.word !== 'string' || typeof candidate.hint !== 'string') {
+    if (!isRecord(candidate) || typeof candidate.word !== 'string') {
       return 'Each item needs a word and hint.'
     }
     const word = candidate.word.trim()
-    const hint = candidate.hint.trim()
     if (!word) {
       return 'Words cannot be blank.'
     }
-    items.push({ word, hint })
+
+    if ('hints' in candidate) {
+      if (!Array.isArray(candidate.hints) || candidate.hints.length !== 5) {
+        return 'Each hints array must contain exactly 5 hints.'
+      }
+      if (candidate.hints.some((hint) => typeof hint !== 'string' || !hint.trim())) {
+        return 'All 5 hints must be non-empty strings.'
+      }
+      const hints = candidate.hints.map((hint) => (hint as string).trim())
+      items.push({ word, hint: hints[0], hints })
+      continue
+    }
+
+    if (typeof candidate.hint !== 'string') {
+      return 'Each item needs a word and hint.'
+    }
+    items.push({ word, hint: candidate.hint.trim() })
   }
 
   const normalizedWords = items.map((item) => item.word.toLocaleLowerCase())
@@ -102,6 +117,8 @@ export function serializeWordPack(pack: WordPack): string {
   return JSON.stringify({
     packName: pack.packName,
     category: pack.category,
-    items: pack.items,
+    items: pack.items.map((item) => item.hints?.length
+      ? { word: item.word, hints: item.hints }
+      : { word: item.word, hint: item.hint }),
   }, null, 2)
 }

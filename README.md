@@ -51,12 +51,15 @@ Canonical import/export format:
   "packName": "Custom Deck Title",
   "category": "Custom",
   "items": [
-    { "word": "Example Word", "hint": "Example Hint" }
+    {
+      "word": "Example Word",
+      "hints": ["First", "Second", "Third", "Fourth", "Fifth"]
+    }
   ]
 }
 ```
 
-The fallback format `{ "words": ["..."], "hints": ["..."] }` is also accepted when both arrays have the same length. The AI prompt helper copies a topic-specific prompt that asks ChatGPT, Gemini, or Claude for canonical JSON; no AI service is called by MoldyParty.
+Each new-format item contains five hints; one is selected randomly when the round starts. Existing items with a single `"hint"` remain compatible. The fallback format `{ "words": ["..."], "hints": ["..."] }` is also accepted when both arrays have the same length. The AI prompt helper copies a topic-specific prompt that asks ChatGPT, Gemini, or Claude for canonical JSON; no AI service is called by MoldyParty.
 
 ## Architecture
 

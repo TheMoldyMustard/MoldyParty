@@ -50,7 +50,16 @@ export default function PackManager({
 
   async function saveManualPack() {
     const normalizedItems = items
-      .map((item) => ({ word: item.word.trim(), hint: item.hint.trim() }))
+      .map((item) => {
+        const hint = item.hint.trim()
+        return {
+          word: item.word.trim(),
+          hint,
+          ...(item.hints?.length ? {
+            hints: item.hints.map((storedHint, index) => index === 0 ? hint : storedHint.trim()),
+          } : {}),
+        }
+      })
       .filter((item) => item.word)
     const result = parseWordPackJson(JSON.stringify({
       packName,
