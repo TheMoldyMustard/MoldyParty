@@ -52,6 +52,27 @@ describe('Impostor game interface', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Player names must be unique.')
   })
 
+  it('keeps unfinished setup while visiting custom pack management', async () => {
+    const user = await openConfiguredLobby()
+    await user.click(screen.getByRole('button', { name: 'Manage custom packs' }))
+    await user.click(screen.getByRole('button', { name: '← Back to setup' }))
+
+    expect(screen.getByLabelText('Player 1 name')).toHaveValue('Alex')
+    expect(screen.getByLabelText('Player 2 name')).toHaveValue('Blair')
+    expect(screen.getByLabelText('Player 3 name')).toHaveValue('Casey')
+  })
+
+  it('masks a revealed role when focus leaves the reveal control', async () => {
+    const user = await openConfiguredLobby()
+    await user.click(screen.getByRole('button', { name: 'Start secret round' }))
+    const reveal = screen.getByRole('button', { name: /hold to reveal/i })
+
+    fireEvent.keyDown(reveal, { key: ' ' })
+    expect(screen.getByTestId('private-role')).toBeInTheDocument()
+    fireEvent.blur(reveal)
+    expect(screen.queryByTestId('private-role')).not.toBeInTheDocument()
+  })
+
   it('plays a full private round through voting and result reveal', async () => {
     const user = await openConfiguredLobby()
     await user.click(screen.getByRole('button', { name: 'Start secret round' }))
@@ -71,7 +92,9 @@ describe('Impostor game interface', () => {
       await user.click(screen.getByRole('button', { name: `I’m ${voter}` }))
       const ballot = screen.getByRole('group', { name: 'Vote for one player' })
       expect(within(ballot).queryByRole('button', { name: voter })).not.toBeInTheDocument()
-      await user.click(within(ballot).getByRole('button', { name: target }))
+      const targetButton = within(ballot).getByRole('button', { name: target })
+      await user.click(targetButton)
+      expect(targetButton).toHaveAttribute('aria-pressed', 'true')
       await user.click(screen.getByRole('button', { name: 'Lock in vote' }))
     }
 

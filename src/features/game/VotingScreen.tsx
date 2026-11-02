@@ -21,9 +21,9 @@ export default function VotingScreen() {
       <p>Your choice stays hidden after you lock it in.</p>
       <div className="ballot-grid" role="group" aria-label="Vote for one player">
         {game.players.filter((player) => player.id !== voter.id).map((player) => (
-          <button className={pendingVote === player.id ? 'selected' : ''} type="button" key={player.id} onClick={() => castVote(player.id)}>{player.name}</button>
+          <button aria-pressed={pendingVote === player.id} className={pendingVote === player.id ? 'selected' : ''} type="button" key={player.id} onClick={() => castVote(player.id)}>{player.name}</button>
         ))}
-        <button className={`skip ${pendingVote === null ? 'selected' : ''}`} type="button" onClick={() => castVote(null)}>Skip vote</button>
+        <button aria-pressed={pendingVote === null} className={`skip ${pendingVote === null ? 'selected' : ''}`} type="button" onClick={() => castVote(null)}>Skip vote</button>
       </div>
       <button className="button button--hero" type="button" disabled={pendingVote === undefined} onClick={confirmVote}>Lock in vote</button>
     </main>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useGameStore } from '../../store/gameStore'
 
 export default function RoleRevealScreen() {
@@ -8,6 +8,21 @@ export default function RoleRevealScreen() {
   const confirmRole = useGameStore((state) => state.confirmRole)
   const [hasRevealed, setHasRevealed] = useState(false)
   const player = game.players[game.currentRevealIndex]
+
+  useEffect(() => {
+    const mask = () => hideRole()
+    const maskWhenHidden = () => { if (document.visibilityState !== 'visible') hideRole() }
+    window.addEventListener('blur', mask)
+    window.addEventListener('pointerup', mask)
+    window.addEventListener('pointercancel', mask)
+    document.addEventListener('visibilitychange', maskWhenHidden)
+    return () => {
+      window.removeEventListener('blur', mask)
+      window.removeEventListener('pointerup', mask)
+      window.removeEventListener('pointercancel', mask)
+      document.removeEventListener('visibilitychange', maskWhenHidden)
+    }
+  }, [hideRole])
 
   function reveal() { setHasRevealed(true); showRole() }
 
@@ -22,10 +37,17 @@ export default function RoleRevealScreen() {
         className="reveal-pad"
         type="button"
         aria-label="Hold to reveal your role"
-        onPointerDown={reveal}
-        onPointerUp={hideRole}
+        onPointerDown={(event) => {
+          event.currentTarget.setPointerCapture?.(event.pointerId)
+          reveal()
+        }}
+        onPointerUp={(event) => {
+          if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+          hideRole()
+        }}
         onPointerCancel={hideRole}
         onPointerLeave={hideRole}
+        onBlur={hideRole}
         onKeyDown={(event) => { if (event.key === ' ' || event.key === 'Enter') reveal() }}
         onKeyUp={(event) => { if (event.key === ' ' || event.key === 'Enter') hideRole() }}
       >

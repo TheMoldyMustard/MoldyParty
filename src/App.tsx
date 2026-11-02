@@ -3,7 +3,7 @@ import InstallPrompt from './components/InstallPrompt'
 import UpdatePrompt from './components/UpdatePrompt'
 import DiscussionScreen from './features/game/DiscussionScreen'
 import GameOverScreen from './features/game/GameOverScreen'
-import LobbyScreen from './features/game/LobbyScreen'
+import LobbyScreen, { type LobbyDraft } from './features/game/LobbyScreen'
 import RoleRevealScreen from './features/game/RoleRevealScreen'
 import VotingScreen from './features/game/VotingScreen'
 import PackManager from './features/packs/PackManager'
@@ -13,6 +13,7 @@ type AppView = 'home' | 'lobby' | 'packs'
 
 function AppContent() {
   const [view, setView] = useState<AppView>('home')
+  const [lobbyDraft, setLobbyDraft] = useState<LobbyDraft | null>(null)
   const game = useGameStore((state) => state.game)
   const changeCategory = useGameStore((state) => state.changeCategory)
   const returnToLobby = useGameStore((state) => state.returnToLobby)
@@ -25,7 +26,7 @@ function AppContent() {
     onReturnToLobby={() => { returnToLobby(); setView('home') }}
   />
 
-  if (view === 'lobby') return <LobbyScreen onBack={() => setView('home')} onManagePacks={() => setView('packs')} />
+  if (view === 'lobby') return <LobbyScreen draft={lobbyDraft} onDraftChange={setLobbyDraft} onBack={() => setView('home')} onManagePacks={() => setView('packs')} />
   if (view === 'packs') return <main className="screen"><nav className="topbar"><button className="text-button" onClick={() => setView('lobby')}>← Back to setup</button></nav><PackManager /></main>
 
   return (

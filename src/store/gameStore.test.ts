@@ -58,10 +58,18 @@ describe('game store', () => {
 
   it('replays with the same setup and increments the round', () => {
     const store = createGameStore('replay', () => 0)
-    store.getState().startGame(setup)
+    store.getState().startGame({
+      ...setup,
+      pack: { ...setup.pack, items: [
+        { word: 'Moon', hint: 'Orbit' },
+        { word: 'Comet', hint: 'Tail' },
+      ] },
+    })
+    expect(store.getState().game?.currentWord).toBe('Moon')
     store.getState().playAgain()
 
     expect(store.getState().game).toMatchObject({ phase: 'ROLE_REVEAL', round: 2 })
+    expect(store.getState().game?.currentWord).toBe('Comet')
     expect(store.getState().setup?.pack.id).toBe('test')
   })
 
@@ -92,5 +100,48 @@ describe('game store', () => {
       currentRevealIndex: 1,
       currentWord: 'Moon',
     })
+  })
+
+  it('always masks a visible role and unfinished ballot after hydration', async () => {
+    const revealStore = createGameStore('private-reveal', () => 0)
+    revealStore.getState().startGame(setup)
+    revealStore.getState().showRole()
+
+    const restoredReveal = createGameStore('private-reveal', () => 0)
+    await restoredReveal.persist.rehydrate()
+    expect(restoredReveal.getState().game?.isRoleVisible).toBe(false)
+
+    const ballotStore = createGameStore('private-ballot', () => 0)
+    ballotStore.getState().startGame(setup)
+    ballotStore.getState().confirmRole(); ballotStore.getState().confirmRole(); ballotStore.getState().confirmRole()
+    ballotStore.getState().beginVoting()
+    ballotStore.getState().showVote()
+    ballotStore.getState().castVote('player-2')
+
+    const restoredBallot = createGameStore('private-ballot', () => 0)
+    await restoredBallot.persist.rehydrate()
+    expect(restoredBallot.getState().isVoteReady).toBe(false)
+    expect(restoredBallot.getState().pendingVote).toBeUndefined()
+    expect(restoredBallot.getState().game?.votes).toEqual([])
+  })
+
+  it('persists a paused timer and derives a running timer from elapsed wall time', async () => {
+    let now = 1_000
+    const clock = () => now
+    const store = createGameStore('timer-recovery', () => 0, localStorage, clock)
+    store.getState().startGame(setup)
+    store.getState().confirmRole(); store.getState().confirmRole(); store.getState().confirmRole()
+    expect(store.getState().discussionRemainingSeconds).toBe(180)
+
+    now += 2_500
+    store.getState().syncDiscussionTimer()
+    expect(store.getState().discussionRemainingSeconds).toBe(178)
+    store.getState().pauseDiscussionTimer()
+
+    now += 30_000
+    const restored = createGameStore('timer-recovery', () => 0, localStorage, clock)
+    await restored.persist.rehydrate()
+    expect(restored.getState().discussionRemainingSeconds).toBe(178)
+    expect(restored.getState().isDiscussionTimerRunning).toBe(false)
   })
 })

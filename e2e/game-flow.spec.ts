@@ -3,9 +3,10 @@ import { expect, test, type Page } from '@playwright/test'
 async function holdReveal(page: Page, player: string) {
   await expect(page.getByRole('heading', { name: `Pass to ${player}` })).toBeVisible()
   const reveal = page.getByRole('button', { name: 'Hold to reveal your role' })
-  await reveal.dispatchEvent('pointerdown')
+  await reveal.hover()
+  await page.mouse.down()
   await expect(page.getByTestId('private-role')).toBeVisible()
-  await reveal.dispatchEvent('pointerup')
+  await page.mouse.up()
   await expect(page.getByTestId('private-role')).toBeHidden()
   await page.getByRole('button', { name: /seen my role/i }).click()
 }

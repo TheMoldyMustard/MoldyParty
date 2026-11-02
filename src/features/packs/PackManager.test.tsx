@@ -4,9 +4,9 @@ import { describe, expect, it, vi } from 'vitest'
 import type { PackRepository } from './packDb'
 import PackManager from './PackManager'
 
-function fakeRepository(): PackRepository {
+function fakeRepository(packs = [] as Awaited<ReturnType<PackRepository['list']>>): PackRepository {
   return {
-    list: vi.fn().mockResolvedValue([]),
+    list: vi.fn().mockResolvedValue(packs),
     put: vi.fn().mockResolvedValue(undefined),
     rename: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
@@ -40,5 +40,31 @@ describe('PackManager', () => {
     await user.paste('{oops')
 
     expect(screen.getByRole('alert')).toHaveTextContent('That is not valid JSON.')
+  })
+
+  it('edits a saved pack in place and preserves its id', async () => {
+    const user = userEvent.setup()
+    const savedPack = {
+      id: 'saved-pack',
+      packName: 'Friends',
+      category: 'Custom',
+      source: 'custom' as const,
+      items: [{ word: 'Taylor', hint: 'Singer' }],
+      createdAt: '2026-11-02T00:00:00.000Z',
+    }
+    const repository = fakeRepository([savedPack])
+    render(<PackManager repository={repository} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Edit Friends' }))
+    expect(screen.getByLabelText('Pack name')).toHaveValue('Friends')
+    await user.clear(screen.getByLabelText('Hint 1'))
+    await user.type(screen.getByLabelText('Hint 1'), 'Pop star')
+    await user.click(screen.getByRole('button', { name: 'Update pack' }))
+
+    expect(repository.put).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'saved-pack',
+      createdAt: savedPack.createdAt,
+      items: [{ word: 'Taylor', hint: 'Pop star' }],
+    }))
   })
 })

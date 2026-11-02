@@ -22,6 +22,7 @@ export default function PackManager({
   const [jsonText, setJsonText] = useState('')
   const [savedPacks, setSavedPacks] = useState<WordPack[]>([])
   const [message, setMessage] = useState('')
+  const [editingPackId, setEditingPackId] = useState<string | null>(null)
   const parsedImport = useMemo(() => parseWordPackJson(jsonText), [jsonText])
 
   const refresh = useCallback(async () => {
@@ -60,8 +61,14 @@ export default function PackManager({
       setMessage(result.error)
       return
     }
-    await repository.put(result.pack)
-    setMessage('Pack saved on this device.')
+    const existing = editingPackId ? savedPacks.find((pack) => pack.id === editingPackId) : undefined
+    await repository.put(existing ? {
+      ...result.pack,
+      id: existing.id,
+      createdAt: existing.createdAt,
+    } : result.pack)
+    setMessage(existing ? 'Pack updated on this device.' : 'Pack saved on this device.')
+    setEditingPackId(null)
     setPackName('')
     setItems([emptyItem()])
     await refresh()
@@ -86,6 +93,14 @@ export default function PackManager({
       await repository.rename(pack.id, nextName)
       await refresh()
     }
+  }
+
+  function editPack(pack: WordPack) {
+    setMode('manual')
+    setEditingPackId(pack.id)
+    setPackName(pack.packName)
+    setItems(pack.items.map((item) => ({ ...item })))
+    setMessage('')
   }
 
   async function deletePack(pack: WordPack) {
@@ -128,7 +143,8 @@ export default function PackManager({
           ))}
           <div className="button-row">
             <button className="button button--secondary" onClick={() => setItems((current) => [...current, emptyItem()])}>Add another word</button>
-            <button className="button" onClick={() => void saveManualPack()}>Save pack</button>
+            {editingPackId && <button className="text-button" type="button" onClick={() => { setEditingPackId(null); setPackName(''); setItems([emptyItem()]) }}>Cancel edit</button>}
+            <button className="button" onClick={() => void saveManualPack()}>{editingPackId ? 'Update pack' : 'Save pack'}</button>
           </div>
         </div>
       ) : (
@@ -150,6 +166,7 @@ export default function PackManager({
             <div><strong>{pack.packName}</strong><span>{pack.items.length} words</span></div>
             <details><summary>Preview</summary><p>{pack.items.map((item) => item.word).join(' · ')}</p></details>
             <div className="button-row button-row--compact">
+              <button aria-label={`Edit ${pack.packName}`} onClick={() => editPack(pack)}>Edit</button>
               <button onClick={() => void renamePack(pack)}>Rename</button>
               <button onClick={() => exportPack(pack)}>Export</button>
               <button className="danger" onClick={() => void deletePack(pack)}>Delete</button>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useGameStore } from '../../store/gameStore'
 
 function formatTime(seconds: number) {
@@ -8,15 +8,19 @@ function formatTime(seconds: number) {
 export default function DiscussionScreen() {
   const game = useGameStore((state) => state.game)!
   const beginVoting = useGameStore((state) => state.beginVoting)
+  const remaining = useGameStore((state) => state.discussionRemainingSeconds) ?? 0
+  const running = useGameStore((state) => state.isDiscussionTimerRunning)
+  const pauseTimer = useGameStore((state) => state.pauseDiscussionTimer)
+  const resumeTimer = useGameStore((state) => state.resumeDiscussionTimer)
+  const syncTimer = useGameStore((state) => state.syncDiscussionTimer)
   const initialSeconds = game.discussionDurationSeconds
-  const [remaining, setRemaining] = useState(initialSeconds ?? 0)
-  const [running, setRunning] = useState(initialSeconds !== null)
 
   useEffect(() => {
-    if (!running || remaining <= 0) return
-    const timer = window.setInterval(() => setRemaining((value) => Math.max(0, value - 1)), 1000)
+    syncTimer()
+    if (!running) return
+    const timer = window.setInterval(syncTimer, 500)
     return () => window.clearInterval(timer)
-  }, [remaining, running])
+  }, [running, syncTimer])
 
   return (
     <main className="screen discussion-screen">
@@ -26,7 +30,7 @@ export default function DiscussionScreen() {
       {initialSeconds !== null ? (
         <div className="timer-card">
           <strong aria-live="polite">{formatTime(remaining)}</strong>
-          <button className="button button--secondary" type="button" onClick={() => setRunning((value) => !value)}>{running ? 'Pause timer' : 'Resume timer'}</button>
+          <button className="button button--secondary" type="button" onClick={running ? pauseTimer : resumeTimer}>{running ? 'Pause timer' : 'Resume timer'}</button>
         </div>
       ) : <div className="timer-card timer-card--open"><strong>Open discussion</strong><span>No timer this round</span></div>}
       <div className="discussion-tips"><span>Ask specifics</span><span>Watch reactions</span><span>Defend your clues</span></div>

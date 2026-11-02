@@ -12,6 +12,9 @@ export interface GameStoreState {
   game: GameState | null
   pendingVote: string | null | undefined
   isVoteReady: boolean
+  discussionRemainingSeconds: number | null
+  discussionDeadlineMs: number | null
+  isDiscussionTimerRunning: boolean
   lobbyIntent: LobbyIntent
   startGame: (setup: GameSetupInput) => void
   showRole: () => void
@@ -21,6 +24,9 @@ export interface GameStoreState {
   showVote: () => void
   castVote: (targetId: string | null) => void
   confirmVote: () => void
+  pauseDiscussionTimer: () => void
+  resumeDiscussionTimer: () => void
+  syncDiscussionTimer: () => void
   playAgain: () => void
   changeCategory: () => void
   returnToLobby: () => void
@@ -30,12 +36,16 @@ export function createGameStore(
   storageName = 'moldyparty-game',
   random: () => number = Math.random,
   storage: StateStorage = localStorage,
+  clock: () => number = Date.now,
 ) {
   return createStore<GameStoreState>()(persist((set) => ({
     setup: null,
     game: null,
     pendingVote: undefined,
     isVoteReady: false,
+    discussionRemainingSeconds: null,
+    discussionDeadlineMs: null,
+    isDiscussionTimerRunning: false,
     lobbyIntent: 'default',
 
     startGame: (setup) => set({
@@ -43,6 +53,9 @@ export function createGameStore(
       game: createRound(setup, random),
       pendingVote: undefined,
       isVoteReady: false,
+      discussionRemainingSeconds: null,
+      discussionDeadlineMs: null,
+      isDiscussionTimerRunning: false,
       lobbyIntent: 'default',
     }),
 
@@ -56,10 +69,18 @@ export function createGameStore(
       : state,
     ),
 
-    confirmRole: () => set((state) => state.game
-      ? { game: advanceRoleReveal(state.game) }
-      : state,
-    ),
+    confirmRole: () => set((state) => {
+      if (!state.game) return state
+      const game = advanceRoleReveal(state.game)
+      const enteredDiscussion = state.game.phase === 'ROLE_REVEAL' && game.phase === 'DISCUSSION'
+      const duration = game.discussionDurationSeconds
+      return enteredDiscussion ? {
+        game,
+        discussionRemainingSeconds: duration,
+        discussionDeadlineMs: duration === null ? null : clock() + duration * 1000,
+        isDiscussionTimerRunning: duration !== null,
+      } : { game }
+    }),
 
     beginVoting: () => set((state) => state.game
       ? {
@@ -92,15 +113,52 @@ export function createGameStore(
       }
     }),
 
+    pauseDiscussionTimer: () => set((state) => {
+      if (!state.isDiscussionTimerRunning || state.discussionDeadlineMs === null) return state
+      return {
+        discussionRemainingSeconds: Math.max(0, Math.ceil((state.discussionDeadlineMs - clock()) / 1000)),
+        discussionDeadlineMs: null,
+        isDiscussionTimerRunning: false,
+      }
+    }),
+
+    resumeDiscussionTimer: () => set((state) => {
+      if (state.isDiscussionTimerRunning || state.discussionRemainingSeconds === null) return state
+      return {
+        discussionDeadlineMs: clock() + state.discussionRemainingSeconds * 1000,
+        isDiscussionTimerRunning: state.discussionRemainingSeconds > 0,
+      }
+    }),
+
+    syncDiscussionTimer: () => set((state) => {
+      if (!state.isDiscussionTimerRunning || state.discussionDeadlineMs === null) return state
+      const remaining = Math.max(0, Math.ceil((state.discussionDeadlineMs - clock()) / 1000))
+      return {
+        discussionRemainingSeconds: remaining,
+        discussionDeadlineMs: remaining === 0 ? null : state.discussionDeadlineMs,
+        isDiscussionTimerRunning: remaining > 0,
+      }
+    }),
+
     playAgain: () => set((state) => {
       if (!state.setup) return state
+      const replayPack = state.game && state.setup.pack.items.length > 1
+        ? {
+            ...state.setup.pack,
+            items: state.setup.pack.items.filter((item) => item.word !== state.game?.currentWord),
+          }
+        : state.setup.pack
       return {
         game: createRound({
           ...state.setup,
+          pack: replayPack,
           round: (state.game?.round ?? 0) + 1,
         }, random),
         pendingVote: undefined,
         isVoteReady: false,
+        discussionRemainingSeconds: null,
+        discussionDeadlineMs: null,
+        isDiscussionTimerRunning: false,
       }
     }),
 
@@ -108,6 +166,9 @@ export function createGameStore(
       game: null,
       pendingVote: undefined,
       isVoteReady: false,
+      discussionRemainingSeconds: null,
+      discussionDeadlineMs: null,
+      isDiscussionTimerRunning: false,
       lobbyIntent: 'category',
     }),
 
@@ -115,6 +176,9 @@ export function createGameStore(
       game: null,
       pendingVote: undefined,
       isVoteReady: false,
+      discussionRemainingSeconds: null,
+      discussionDeadlineMs: null,
+      isDiscussionTimerRunning: false,
       lobbyIntent: 'default',
     }),
   }), {
@@ -123,11 +187,22 @@ export function createGameStore(
     storage: createJSONStorage(() => storage),
     partialize: (state) => ({
       setup: state.setup,
-      game: state.game,
-      pendingVote: state.pendingVote,
-      isVoteReady: state.isVoteReady,
+      game: state.game ? { ...state.game, isRoleVisible: false } : null,
+      discussionRemainingSeconds: state.discussionRemainingSeconds,
+      discussionDeadlineMs: state.discussionDeadlineMs,
+      isDiscussionTimerRunning: state.isDiscussionTimerRunning,
       lobbyIntent: state.lobbyIntent,
     }),
+    merge: (persisted, current) => {
+      const saved = persisted as Partial<GameStoreState>
+      return {
+        ...current,
+        ...saved,
+        game: saved.game ? { ...saved.game, isRoleVisible: false } : null,
+        pendingVote: undefined,
+        isVoteReady: false,
+      }
+    },
   }))
 }
 
