@@ -126,6 +126,63 @@ describe('game store', () => {
     expect(store.getState().game).toMatchObject({ phase: 'ROLE_REVEAL', currentRevealIndex: 1 })
   })
 
+  it('aborts an unfinished round without changing session statistics', () => {
+    const store = createGameStore('abort-session', () => 0, localStorage, () => 1_000, () => 'session-1')
+    store.getState().createSession('Friday Crew')
+    store.getState().startGame(setup)
+    completePrivateRound(store)
+
+    const completed = structuredClone(store.getState().sessionsById['session-1'])
+    store.getState().playAgain()
+    expect(store.getState().game?.phase).toBe('ROLE_REVEAL')
+
+    store.getState().abortGame()
+
+    expect(store.getState().game).toBeNull()
+    expect(store.getState().activeSessionId).toBeNull()
+    expect(store.getState().sessionsById['session-1']).toMatchObject({
+      currentGame: null,
+      completedRounds: completed.completedRounds,
+      statsByPlayerId: completed.statsByPlayerId,
+    })
+  })
+
+  it('persists an aborted session without a current game', async () => {
+    const store = createGameStore('abort-persistence', () => 0, localStorage, () => 1_000, () => 'session-1')
+    store.getState().createSession('Friday Crew')
+    store.getState().startGame(setup)
+    store.getState().abortGame()
+
+    const restored = createGameStore('abort-persistence', () => 0)
+    await restored.persist.rehydrate()
+
+    expect(restored.getState().sessionsById['session-1']).toMatchObject({
+      name: 'Friday Crew',
+      currentGame: null,
+      completedRounds: 0,
+    })
+    expect(restored.getState().sessionsById['session-1'].statsByPlayerId['player-1'].roundsPlayed).toBe(0)
+  })
+
+  it('preserves completed statistics when an aborted session is hydrated', async () => {
+    const store = createGameStore('abort-prior-stats', () => 0, localStorage, () => 1_000, () => 'session-1')
+    store.getState().createSession('Friday Crew')
+    store.getState().startGame(setup)
+    completePrivateRound(store)
+    const expectedStats = structuredClone(store.getState().sessionsById['session-1'].statsByPlayerId)
+    store.getState().playAgain()
+    store.getState().abortGame()
+
+    const restored = createGameStore('abort-prior-stats', () => 0)
+    await restored.persist.rehydrate()
+
+    expect(restored.getState().sessionsById['session-1']).toMatchObject({
+      currentGame: null,
+      completedRounds: 1,
+      statsByPlayerId: expectedStats,
+    })
+  })
+
   it('preserves player identity when starting the next round of a saved session', () => {
     const store = createGameStore('stable-roster', () => 0, localStorage, () => 1_000, () => 'session-1')
     store.getState().createSession('Friday Crew')

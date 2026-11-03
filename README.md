@@ -41,6 +41,7 @@ Install Playwright's browser once on a new machine with `npx playwright install 
 6. Vote privately by passing the device again, or enable **Group Vote** in setup for one shared ballot without the voting handoff. Select up to the number of impostors in either mode; private voters cannot select themselves. If you forgot to enable it, the voting handoff offers **Proceed to Group Vote**. The result screen offers Group Vote as a shortcut for the next round.
 7. If an Outlier is enabled, pass the device privately to them after voting. They say their guess aloud and enter the same word so the game can validate it. Matching ignores surrounding whitespace and letter case; being voted out does not affect the Outlier's result.
 8. The selected candidate or candidates are revealed. A tie votes out all tied leaders; an all-skipped private ballot eliminates nobody. The secret word, special-role outcomes, every player's role, and the session stats table are then shown.
+9. During any active round, use **Abort game** if the group wants to stop. After confirmation, the unfinished round is discarded and the session returns to setup; completed session statistics are not changed.
 
 ## Local sessions and statistics
 

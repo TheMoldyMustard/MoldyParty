@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
+import AbortGameDialog from './features/game/AbortGameDialog'
 import InstallPrompt from './components/InstallPrompt'
 import UpdatePrompt from './components/UpdatePrompt'
 import DiscussionScreen from './features/game/DiscussionScreen'
@@ -21,18 +22,25 @@ function AppContent() {
   const game = useGameStore((state) => state.game)
   const changeCategory = useGameStore((state) => state.changeCategory)
   const returnToLobby = useGameStore((state) => state.returnToLobby)
+  const abortGame = useGameStore((state) => state.abortGame)
   const createSession = useGameStore((state) => state.createSession)
   const continueSession = useGameStore((state) => state.continueSession)
   const activeSessionId = useGameStore((state) => state.activeSessionId)
 
-  if (game?.phase === 'ROLE_REVEAL') return <RoleRevealScreen key={game.currentRevealIndex} />
-  if (game?.phase === 'DISCUSSION') return <DiscussionScreen />
-  if (game?.phase === 'VOTING') return <VotingScreen />
-  if (game?.phase === 'OUTLIER_GUESS') return <OutlierGuessScreen />
   if (game?.phase === 'GAME_OVER') return <GameOverScreen
     onChangeCategory={() => { changeCategory(); setView('sessions') }}
     onReturnToLobby={() => { returnToLobby(); setView('sessions') }}
   />
+
+  let activeGameScreen: ReactNode = null
+  if (game?.phase === 'ROLE_REVEAL') activeGameScreen = <RoleRevealScreen key={game.currentRevealIndex} />
+  if (game?.phase === 'DISCUSSION') activeGameScreen = <DiscussionScreen />
+  if (game?.phase === 'VOTING') activeGameScreen = <VotingScreen />
+  if (game?.phase === 'OUTLIER_GUESS') activeGameScreen = <OutlierGuessScreen />
+  if (activeGameScreen) return <>
+    {activeGameScreen}
+    <AbortGameDialog onConfirm={() => { abortGame(); setView('sessions') }} />
+  </>
 
   if (view === 'sessions') return <SessionManagerScreen
     onBack={() => setView('home')}

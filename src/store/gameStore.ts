@@ -272,6 +272,7 @@ export interface GameStoreState {
   createSession: (name: string) => void
   continueSession: (sessionId: string) => void
   deleteSession: (sessionId: string) => void
+  abortGame: () => void
   startGame: (setup: GameSetupInput) => void
   showRole: () => void
   hideRole: () => void
@@ -441,6 +442,27 @@ export function createGameStore(
         activeSessionId: deletingActive ? null : state.activeSessionId,
         setup: deletingActive ? null : state.setup,
         game: deletingActive ? null : state.game,
+      }
+    }),
+
+    abortGame: () => set((state) => {
+      if (!state.activeSessionId || !state.sessionsById[state.activeSessionId]) return state
+      const sessionsById = {
+        ...state.sessionsById,
+        [state.activeSessionId]: { ...state.sessionsById[state.activeSessionId], currentGame: null },
+      }
+      return {
+        sessionsById,
+        activeSessionId: null,
+        setup: null,
+        game: null,
+        pendingVote: undefined,
+        isVoteReady: false,
+        pendingOutlierGuess: '',
+        isOutlierGuessReady: false,
+        discussionRemainingSeconds: null,
+        discussionDeadlineMs: null,
+        isDiscussionTimerRunning: false,
       }
     }),
 

@@ -221,3 +221,30 @@ test('saved session can be continued, inspected, and deleted locally', async ({ 
   await expect(page.getByRole('button', { name: 'Other Crew' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Stats Crew' })).toHaveCount(0)
 })
+
+test('can abort an unfinished game without counting it', async ({ page }) => {
+  await openNewSession(page, 'Abort Crew')
+  for (const [index, name] of ['Alex', 'Blair', 'Casey'].entries()) {
+    await page.getByLabel(`Player ${index + 1} name`).fill(name)
+  }
+  await page.getByRole('button', { name: 'Start secret round' }).click()
+
+  await expect(page.getByRole('heading', { name: 'Pass to Alex' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Abort game' })).toBeVisible()
+  await page.getByRole('button', { name: 'Abort game' }).click()
+  await expect(page.getByRole('dialog')).toContainText('Completed session stats stay unchanged')
+  await page.getByRole('button', { name: 'Cancel' }).click()
+  await expect(page.getByRole('heading', { name: 'Pass to Alex' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Abort game' }).click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Abort game' }).click()
+  await expect(page.getByRole('heading', { name: 'Impostor sessions' })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Abort Crew/ })).toContainText('0 completed rounds')
+
+  await page.reload()
+  await page.getByRole('button', { name: 'Open Impostor' }).click()
+  await page.getByRole('button', { name: 'Abort Crew' }).click()
+  await page.getByRole('button', { name: 'Continue a session' }).click()
+  await expect(page.getByRole('heading', { name: 'Who can you trust?' })).toBeVisible()
+  await expect(page.getByLabel('Player 1 name')).toHaveValue('Alex')
+})
