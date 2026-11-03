@@ -26,13 +26,15 @@ export interface WordPack {
 
 export interface VoteRecord {
   voterId: string
-  targetId: string | null
+  targetIds?: string[]
+  targetId?: string | null
 }
 
 export interface VoteResult {
   counts: Record<string, number>
   topCandidateIds: string[]
-  eliminatedPlayerId: string | null
+  eliminatedPlayerIds?: string[]
+  eliminatedPlayerId?: string | null
   isTie: boolean
 }
 
@@ -68,6 +70,7 @@ export interface GameState {
   isRoleVisible: boolean
   currentVoterIndex: number
   votes: VoteRecord[]
+  groupVote?: string[] | null
   voteResult: VoteResult | null
   currentOutlierGuessIndex: number
   outlierGuesses: OutlierGuessRecord[]

@@ -96,7 +96,7 @@ describe('createRound', () => {
     expect(state.hintsEnabled).toBe(false)
   })
 
-  it('copies Absolute Voting into the round state', () => {
+  it('copies Group Vote into the round state', () => {
     const state = createRound({ ...validSetup, absoluteVotingEnabled: true }, () => 0)
 
     expect(state.absoluteVotingEnabled).toBe(true)
@@ -248,6 +248,7 @@ describe('calculateVoteResult', () => {
     expect(calculateVoteResult(votingPlayers, votes)).toEqual({
       counts: { a: 0, b: 2, c: 1 },
       topCandidateIds: ['b'],
+      eliminatedPlayerIds: ['b'],
       eliminatedPlayerId: 'b',
       isTie: false,
     })
@@ -259,12 +260,13 @@ describe('calculateVoteResult', () => {
     expect(calculateVoteResult(votingPlayers, votes)).toEqual({
       counts: { a: 0, b: 0, c: 0 },
       topCandidateIds: [],
+      eliminatedPlayerIds: [],
       eliminatedPlayerId: null,
       isTie: false,
     })
   })
 
-  it('reports every tied leader and eliminates nobody', () => {
+  it('eliminates every tied leader', () => {
     const votes: VoteRecord[] = [
       { voterId: 'a', targetId: 'b' },
       { voterId: 'b', targetId: 'a' },
@@ -274,8 +276,23 @@ describe('calculateVoteResult', () => {
     expect(calculateVoteResult(votingPlayers, votes)).toEqual({
       counts: { a: 1, b: 1, c: 0 },
       topCandidateIds: ['a', 'b'],
+      eliminatedPlayerIds: ['a', 'b'],
       eliminatedPlayerId: null,
       isTie: true,
+    })
+  })
+
+  it('eliminates the configured number of highest-voted candidates and keeps cutoff ties', () => {
+    const votes = [
+      { voterId: 'a', targetIds: ['b', 'c'] },
+      { voterId: 'b', targetIds: ['b', 'c'] },
+      { voterId: 'c', targetIds: ['b', 'a'] },
+    ] as unknown as VoteRecord[]
+
+    expect(calculateVoteResult(votingPlayers, votes, 2)).toMatchObject({
+      counts: { a: 1, b: 3, c: 2 },
+      eliminatedPlayerIds: ['b', 'c'],
+      isTie: false,
     })
   })
 })
@@ -314,6 +331,24 @@ describe('voting lifecycle', () => {
 
     expect(state.phase).toBe('GAME_OVER')
     expect(state.voteResult).toMatchObject({ eliminatedPlayerId: 'b', isTie: false })
+  })
+
+  it('accepts multiple private targets when there are multiple impostors', () => {
+    const state = startVoting({ ...discussionState(), impostorCount: 2 })
+    const next = recordVote(state, ['b', 'c'] as unknown as string | null)
+
+    expect(next.votes).toEqual([{ voterId: 'a', targetIds: ['b', 'c'] }])
+    expect(next.currentVoterIndex).toBe(1)
+  })
+
+  it('completes Group Vote from one collective ballot', () => {
+    const state = startVoting({ ...discussionState(), absoluteVotingEnabled: true, impostorCount: 2 })
+    const next = recordVote(state, ['b', 'c'] as unknown as string | null)
+
+    expect(next.phase).toBe('GAME_OVER')
+    expect(next.currentVoterIndex).toBe(0)
+    expect(next.votes).toEqual([])
+    expect(next.voteResult?.eliminatedPlayerIds).toEqual(['b', 'c'])
   })
 
   it('moves to a private Outlier guess after the final vote', () => {

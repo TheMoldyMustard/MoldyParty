@@ -33,7 +33,7 @@ test('three players can complete a private round and replay', async ({ page }) =
 
   for (const [voter, target] of [['Alex', 'Blair'], ['Blair', 'Alex'], ['Casey', 'Blair']] as const) {
     await page.getByRole('button', { name: `I’m ${voter}` }).click()
-    await page.getByRole('group', { name: 'Vote for one player' }).getByRole('button', { name: target }).click()
+    await page.getByRole('group', { name: 'Vote for up to 1 player' }).getByRole('button', { name: target }).click()
     await page.getByRole('button', { name: 'Lock in vote' }).click()
   }
 
@@ -43,14 +43,14 @@ test('three players can complete a private round and replay', async ({ page }) =
   await expect(page.getByText('Round 2')).toBeVisible()
 })
 
-test('Absolute Voting completes a round without device handoffs', async ({ page }) => {
+test('Group Vote completes a round without device handoffs', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: /set up a round/i }).click()
 
   for (const [index, name] of ['Alex', 'Blair', 'Casey'].entries()) {
     await page.getByLabel(`Player ${index + 1} name`).fill(name)
   }
-  await page.getByLabel('Absolute Voting').check()
+  await page.getByLabel('Group Vote').check()
   await page.getByRole('button', { name: 'Start secret round' }).click()
 
   await holdReveal(page, 'Alex')
@@ -58,19 +58,17 @@ test('Absolute Voting completes a round without device handoffs', async ({ page 
   await holdReveal(page, 'Casey')
   await page.getByRole('button', { name: 'Proceed to voting' }).click()
 
-  await expect(page.getByText('Everyone can see this ballot')).toBeVisible()
+  await expect(page.getByText('Everyone chooses together')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Pass to Alex' })).toHaveCount(0)
-  for (const target of ['Blair', 'Alex', 'Blair']) {
-    await page.getByRole('group', { name: 'Vote for one player' }).getByRole('button', { name: target }).click()
-    await page.getByRole('button', { name: 'Lock in vote' }).click()
-  }
+  await page.getByRole('group', { name: 'Vote for up to 1 player' }).getByRole('button', { name: 'Blair' }).click()
+  await page.getByRole('button', { name: 'Decide the vote' }).click()
 
   await expect(page.getByRole('heading', { name: /was voted out|Nobody was voted out|vote was tied/ })).toBeVisible()
-  await page.getByRole('button', { name: 'Absolute Voting' }).click()
+  await page.getByRole('button', { name: 'Group Vote' }).click()
   await expect(page.getByText('Round 2')).toBeVisible()
 })
 
-test('voting can switch to Absolute Voting after setup', async ({ page }) => {
+test('voting can switch to Group Vote after setup', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: /set up a round/i }).click()
 
@@ -83,10 +81,10 @@ test('voting can switch to Absolute Voting after setup', async ({ page }) => {
   await holdReveal(page, 'Casey')
   await page.getByRole('button', { name: 'Proceed to voting' }).click()
 
-  await page.getByRole('button', { name: 'Proceed to absolute voting' }).click()
-  await expect(page.getByText('Everyone can see this ballot')).toBeVisible()
-  await page.getByRole('group', { name: 'Vote for one player' }).getByRole('button', { name: 'Blair' }).click()
-  await page.getByRole('button', { name: 'Lock in vote' }).click()
+  await page.getByRole('button', { name: 'Proceed to Group Vote' }).click()
+  await expect(page.getByText('Everyone chooses together')).toBeVisible()
+  await page.getByRole('group', { name: 'Vote for up to 1 player' }).getByRole('button', { name: 'Blair' }).click()
+  await page.getByRole('button', { name: 'Decide the vote' }).click()
 })
 
 test('special roles guess privately and every role is revealed', async ({ page }) => {
@@ -134,7 +132,7 @@ test('special roles guess privately and every role is revealed', async ({ page }
   for (const voter of players) {
     await page.getByRole('button', { name: `I’m ${voter}` }).click()
     const target = voter === jester ? players.find((player) => player !== voter)! : jester
-    await page.getByRole('group', { name: 'Vote for one player' }).getByRole('button', { name: target }).click()
+    await page.getByRole('group', { name: 'Vote for up to 1 player' }).getByRole('button', { name: target }).click()
     await page.getByRole('button', { name: 'Lock in vote' }).click()
   }
 

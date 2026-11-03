@@ -232,7 +232,7 @@ describe('Impostor game interface', () => {
     for (const [voter, target] of [['Alex', 'Blair'], ['Blair', 'Alex'], ['Casey', 'Blair']] as const) {
       expect(screen.getByRole('heading', { name: `Pass to ${voter}` })).toBeInTheDocument()
       await user.click(screen.getByRole('button', { name: `I’m ${voter}` }))
-      const ballot = screen.getByRole('group', { name: 'Vote for one player' })
+      const ballot = screen.getByRole('group', { name: 'Vote for up to 1 player' })
       expect(within(ballot).queryByRole('button', { name: voter })).not.toBeInTheDocument()
       const targetButton = within(ballot).getByRole('button', { name: target })
       await user.click(targetButton)
@@ -243,15 +243,15 @@ describe('Impostor game interface', () => {
     expect(screen.getByRole('heading', { name: 'Blair was voted out' })).toBeInTheDocument()
     expect(screen.getByText(/secret word/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Play again' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Absolute Voting' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Group Vote' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Change category' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Return to lobby' })).toBeInTheDocument()
   })
 
-  it('uses a public ballot without passing the device when Absolute Voting is enabled', async () => {
+  it('uses one collective Group Vote without passing the device', async () => {
     const user = await openConfiguredLobby()
-    expect(screen.getByLabelText('Absolute Voting')).not.toBeChecked()
-    await user.click(screen.getByLabelText('Absolute Voting'))
+    expect(screen.getByLabelText('Group Vote')).not.toBeChecked()
+    await user.click(screen.getByLabelText('Group Vote'))
     await user.click(screen.getByRole('button', { name: 'Start secret round' }))
 
     await revealAndConfirm(user, 'Alex')
@@ -260,14 +260,14 @@ describe('Impostor game interface', () => {
     await user.click(screen.getByRole('button', { name: 'Proceed to voting' }))
 
     expect(screen.queryByRole('heading', { name: 'Pass to Alex' })).not.toBeInTheDocument()
-    expect(screen.getByText(/Everyone can see this ballot/)).toBeInTheDocument()
+    expect(screen.getByText(/Everyone chooses together/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Blair' }))
-    await user.click(screen.getByRole('button', { name: 'Lock in vote' }))
+    await user.click(screen.getByRole('button', { name: 'Decide the vote' }))
 
-    expect(screen.getByText('Open vote · 2 of 3')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Blair was voted out' })).toBeInTheDocument()
   })
 
-  it('can switch to Absolute Voting from the private voting handoff', async () => {
+  it('can switch to Group Vote from the private voting handoff', async () => {
     const user = await openConfiguredLobby()
     await user.click(screen.getByRole('button', { name: 'Start secret round' }))
     await revealAndConfirm(user, 'Alex')
@@ -275,11 +275,11 @@ describe('Impostor game interface', () => {
     await revealAndConfirm(user, 'Casey')
     await user.click(screen.getByRole('button', { name: 'Proceed to voting' }))
 
-    expect(screen.getByRole('button', { name: 'Proceed to absolute voting' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Proceed to absolute voting' }))
+    expect(screen.getByRole('button', { name: 'Proceed to Group Vote' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Proceed to Group Vote' }))
 
     expect(screen.queryByRole('heading', { name: 'Pass to Alex' })).not.toBeInTheDocument()
-    expect(screen.getByText(/Everyone can see this ballot/)).toBeInTheDocument()
+    expect(screen.getByText(/Everyone chooses together/)).toBeInTheDocument()
   })
 
   it('reveals every player role and each special-role outcome at round end', () => {
@@ -345,7 +345,7 @@ describe('Impostor game interface', () => {
     }
 
     expect(screen.getByRole('heading', { name: 'Nobody was voted out' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Absolute Voting' }))
+    await user.click(screen.getByRole('button', { name: 'Group Vote' }))
     expect(gameStore.getState().game?.absoluteVotingEnabled).toBe(true)
     expect(gameStore.getState().setup?.absoluteVotingEnabled).toBe(true)
     expect(screen.getByText('Round 2')).toBeInTheDocument()

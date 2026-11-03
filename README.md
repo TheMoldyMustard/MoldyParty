@@ -37,9 +37,9 @@ Install Playwright's browser once on a new machine with `npx playwright install 
 2. Choose fewer impostors than players, a built-in or custom category, optional hints, and an optional discussion timer. You can also enable one Jester and one Outlier, while leaving at least one Innocent in the round.
 3. Pass the device. Each player deliberately holds the reveal surface to see their role; releasing it masks the secret immediately. The Jester tries to get voted out. The Outlier tries to guess the word and receives no hint unless the dedicated Outlier hint setting is enabled.
 4. Discuss until the group chooses to proceed. The timer never advances the game automatically.
-5. Vote privately by passing the device again, or enable **Absolute Voting** in setup to vote openly together without the voting handoff. If you forgot to enable it, the voting handoff also offers **Proceed to absolute voting**. Players may select anyone except themselves or skip. The result screen offers Absolute Voting as a shortcut for the next round.
+5. Vote privately by passing the device again, or enable **Group Vote** in setup for one shared ballot without the voting handoff. Select up to the number of impostors in either mode; private voters cannot select themselves. If you forgot to enable it, the voting handoff offers **Proceed to Group Vote**. The result screen offers Group Vote as a shortcut for the next round.
 6. If an Outlier is enabled, pass the device privately to them after voting. They say their guess aloud and enter the same word so the game can validate it. Matching ignores surrounding whitespace and letter case; being voted out does not affect the Outlier's result.
-7. A unique vote leader is revealed. A tie or all-skipped ballot eliminates nobody. The secret word, special-role outcomes, and every player's role are then shown.
+7. The selected candidate or candidates are revealed. A tie votes out all tied leaders; an all-skipped private ballot eliminates nobody. The secret word, special-role outcomes, and every player's role are then shown.
 
 ## Custom packs
 
@@ -65,7 +65,7 @@ Each new-format item contains five hints; one is selected randomly when the roun
 ## Architecture
 
 - React, TypeScript, Vite, and Tailwind CSS provide the responsive interface.
-- Pure functions in `src/domain` own validation, role assignment, phase transitions, ballots, ties, and results. Voting can be private (pass-device) or Absolute Voting (public/no-handoff); both use the same ballot and result rules.
+- Pure functions in `src/domain` own validation, role assignment, phase transitions, ballots, ties, and results. Voting can be private (pass-device) or Group Vote (one public/no-handoff ballot); both use the same elimination result rules.
 - Zustand coordinates the finite-state lifecycle (`LOBBY → ROLE_REVEAL → DISCUSSION → VOTING → OUTLIER_GUESS? → GAME_OVER`) and persists in-progress recovery.
 - Dexie stores custom packs in IndexedDB.
 - `vite-plugin-pwa`/Workbox precaches the application shell and supplies an offline navigation fallback.

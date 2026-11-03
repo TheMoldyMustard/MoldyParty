@@ -51,7 +51,7 @@ describe('game store', () => {
     store.getState().showVote()
     store.getState().castVote('player-2')
     expect(store.getState().game?.votes).toEqual([])
-    expect(store.getState().pendingVote).toBe('player-2')
+    expect(store.getState().pendingVote).toEqual(['player-2'])
 
     store.getState().confirmVote()
     expect(store.getState().game?.votes).toEqual([
@@ -60,9 +60,25 @@ describe('game store', () => {
     expect(store.getState().isVoteReady).toBe(false)
   })
 
-  it('starts Absolute Voting ready without a pass-device handoff for every voter', () => {
+  it('allows a private voter to select two targets in a two-impostor round', () => {
+    const store = createGameStore('two-private-vote-flow', () => 0)
+    store.getState().startGame({ ...setup, impostorCount: 2 })
+    store.getState().confirmRole()
+    store.getState().confirmRole()
+    store.getState().confirmRole()
+    store.getState().beginVoting()
+    store.getState().showVote()
+    store.getState().castVote('player-2')
+    store.getState().castVote('player-3')
+
+    expect(store.getState().pendingVote).toEqual(['player-2', 'player-3'])
+    store.getState().castVote('player-1')
+    expect(store.getState().pendingVote).toEqual(['player-2', 'player-3'])
+  })
+
+  it('starts Group Vote ready without a pass-device handoff', () => {
     const store = createGameStore('absolute-vote-flow', () => 0)
-    store.getState().startGame({ ...setup, absoluteVotingEnabled: true })
+    store.getState().startGame({ ...setup, impostorCount: 2, absoluteVotingEnabled: true })
     store.getState().confirmRole()
     store.getState().confirmRole()
     store.getState().confirmRole()
@@ -71,13 +87,15 @@ describe('game store', () => {
     expect(store.getState().game?.absoluteVotingEnabled).toBe(true)
     expect(store.getState().isVoteReady).toBe(true)
     store.getState().castVote('player-2')
+    store.getState().castVote('player-3')
     store.getState().confirmVote()
 
-    expect(store.getState().game?.currentVoterIndex).toBe(1)
-    expect(store.getState().isVoteReady).toBe(true)
+    expect(store.getState().game?.phase).toBe('GAME_OVER')
+    expect(store.getState().game?.voteResult?.eliminatedPlayerIds).toEqual(['player-2', 'player-3'])
+    expect(store.getState().isVoteReady).toBe(false)
   })
 
-  it('switches an in-progress private ballot to Absolute Voting without losing votes', () => {
+  it('switches an in-progress private ballot to Group Vote and resets prior votes', () => {
     const store = createGameStore('absolute-switch-flow', () => 0)
     store.getState().startGame(setup)
     store.getState().confirmRole()
@@ -91,13 +109,12 @@ describe('game store', () => {
     store.getState().enableAbsoluteVoting()
 
     expect(store.getState().game?.absoluteVotingEnabled).toBe(true)
-    expect(store.getState().game?.votes).toEqual([
-      { voterId: 'player-1', targetId: 'player-2' },
-    ])
+    expect(store.getState().game?.votes).toEqual([])
+    expect(store.getState().game?.currentVoterIndex).toBe(0)
     expect(store.getState().isVoteReady).toBe(true)
   })
 
-  it('replays with Absolute Voting when the result shortcut is used', () => {
+  it('replays with Group Vote when the result shortcut is used', () => {
     const store = createGameStore('absolute-replay', () => 0)
     store.getState().startGame(setup)
     store.getState().playAgain({ absoluteVotingEnabled: true })

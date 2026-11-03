@@ -112,6 +112,7 @@ export function createRound(input: GameSetupInput, random: () => number = Math.r
     isRoleVisible: false,
     currentVoterIndex: 0,
     votes: [],
+    groupVote: null,
     voteResult: null,
     currentOutlierGuessIndex: 0,
     outlierGuesses: [],
@@ -137,11 +138,16 @@ export function advanceRoleReveal(state: GameState): GameState {
   }
 }
 
-export function calculateVoteResult(players: Player[], votes: VoteRecord[]): VoteResult {
+function targetsFromVote(vote: VoteRecord): string[] {
+  if (Array.isArray(vote.targetIds)) return vote.targetIds
+  return vote.targetId ? [vote.targetId] : []
+}
+
+export function calculateVoteResult(players: Player[], votes: VoteRecord[], impostorCount = 1): VoteResult {
   const counts = Object.fromEntries(players.map((player) => [player.id, 0]))
   for (const vote of votes) {
-    if (vote.targetId !== null && vote.targetId in counts) {
-      counts[vote.targetId] += 1
+    for (const targetId of targetsFromVote(vote)) {
+      if (targetId in counts) counts[targetId] += 1
     }
   }
 
@@ -150,11 +156,21 @@ export function calculateVoteResult(players: Player[], votes: VoteRecord[]): Vot
     ? []
     : players.filter((player) => counts[player.id] === highestCount).map((player) => player.id)
   const isTie = topCandidateIds.length > 1
+  const rankedCandidates = players
+    .filter((player) => counts[player.id] > 0)
+    .sort((left, right) => counts[right.id] - counts[left.id])
+  const cutoffCount = rankedCandidates[Math.min(impostorCount, rankedCandidates.length) - 1]
+    ? counts[rankedCandidates[Math.min(impostorCount, rankedCandidates.length) - 1].id]
+    : 0
+  const eliminatedPlayerIds = cutoffCount === 0
+    ? []
+    : rankedCandidates.filter((player) => counts[player.id] >= cutoffCount).map((player) => player.id)
 
   return {
     counts,
     topCandidateIds,
-    eliminatedPlayerId: topCandidateIds.length === 1 ? topCandidateIds[0] : null,
+    eliminatedPlayerIds,
+    eliminatedPlayerId: eliminatedPlayerIds.length === 1 ? eliminatedPlayerIds[0] : null,
     isTie,
   }
 }
@@ -172,20 +188,50 @@ export function startVoting(state: GameState): GameState {
   }
 }
 
-export function recordVote(state: GameState, targetId: string | null): GameState {
+export function recordVote(state: GameState, targetIds: string | string[] | null): GameState {
   if (state.phase !== 'VOTING') {
     return state
   }
 
-  const voter = state.players[state.currentVoterIndex]
-  if (targetId === voter.id) {
-    throw new Error('You cannot vote for yourself.')
+  const normalizedTargetIds = targetIds === null ? [] : Array.isArray(targetIds) ? targetIds : [targetIds]
+  if (normalizedTargetIds.length > state.impostorCount) {
+    throw new Error(`Choose up to ${state.impostorCount} player${state.impostorCount === 1 ? '' : 's'}.`)
   }
-  if (targetId !== null && !state.players.some((player) => player.id === targetId)) {
+  if (new Set(normalizedTargetIds).size !== normalizedTargetIds.length) {
+    throw new Error('Choose each player only once.')
+  }
+  if (normalizedTargetIds.some((targetId) => !state.players.some((player) => player.id === targetId))) {
     throw new Error('Choose a player in this round.')
   }
 
-  const votes = [...state.votes, { voterId: voter.id, targetId }]
+  if (state.absoluteVotingEnabled) {
+    const voteResult = normalizedTargetIds.length === 0
+      ? calculateVoteResult(state.players, [], state.impostorCount)
+      : {
+          counts: Object.fromEntries(state.players.map((player) => [player.id, normalizedTargetIds.includes(player.id) ? 1 : 0])),
+          topCandidateIds: normalizedTargetIds,
+          eliminatedPlayerIds: normalizedTargetIds,
+          eliminatedPlayerId: normalizedTargetIds.length === 1 ? normalizedTargetIds[0] : null,
+          isTie: false,
+        }
+    const hasOutlier = state.players.some((player) => player.role === 'OUTLIER')
+    return {
+      ...state,
+      phase: hasOutlier ? 'OUTLIER_GUESS' : 'GAME_OVER',
+      groupVote: normalizedTargetIds,
+      voteResult,
+    }
+  }
+
+  const voter = state.players[state.currentVoterIndex]
+  if (normalizedTargetIds.includes(voter.id)) {
+    throw new Error('You cannot vote for yourself.')
+  }
+
+  const ballot = normalizedTargetIds.length <= 1
+    ? { voterId: voter.id, targetId: normalizedTargetIds[0] ?? null }
+    : { voterId: voter.id, targetIds: normalizedTargetIds }
+  const votes = [...state.votes, ballot]
   const isLastVoter = state.currentVoterIndex === state.players.length - 1
 
   const hasOutlier = state.players.some((player) => player.role === 'OUTLIER')
@@ -195,7 +241,7 @@ export function recordVote(state: GameState, targetId: string | null): GameState
     phase: isLastVoter ? (hasOutlier ? 'OUTLIER_GUESS' : 'GAME_OVER') : 'VOTING',
     currentVoterIndex: isLastVoter ? state.currentVoterIndex : state.currentVoterIndex + 1,
     votes,
-    voteResult: isLastVoter ? calculateVoteResult(state.players, votes) : null,
+    voteResult: isLastVoter ? calculateVoteResult(state.players, votes, state.impostorCount) : null,
   }
 }
 
@@ -235,7 +281,9 @@ export function recordOutlierGuess(state: GameState, guess: string): GameState {
 export function calculateSpecialRoleOutcomes(state: GameState): SpecialRoleOutcome[] {
   return state.players.flatMap((player): SpecialRoleOutcome[] => {
     if (player.role === 'JESTER') {
-      const won = state.voteResult?.eliminatedPlayerId === player.id
+      const eliminatedPlayerIds = state.voteResult?.eliminatedPlayerIds
+        ?? (state.voteResult?.eliminatedPlayerId ? [state.voteResult.eliminatedPlayerId] : [])
+      const won = eliminatedPlayerIds.includes(player.id)
       return [{
         playerId: player.id,
         role: 'JESTER',

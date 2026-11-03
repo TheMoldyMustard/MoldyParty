@@ -10,30 +10,34 @@ export default function VotingScreen() {
   const castVote = useGameStore((state) => state.castVote)
   const confirmVote = useGameStore((state) => state.confirmVote)
   const voter = game.players[game.currentVoterIndex]
+  const selectedIds = Array.isArray(pendingVote) ? pendingVote : []
+  const isGroupVote = game.absoluteVotingEnabled
 
-  if (!isVoteReady && !game.absoluteVotingEnabled) {
+  if (!isVoteReady && !isGroupVote) {
     return <PassDeviceMask
       playerName={voter.name}
       eyebrow={`Secret vote · ${game.currentVoterIndex + 1} of ${game.players.length}`}
       actionLabel={`I’m ${voter.name}`}
       onReady={showVote}
-      secondaryActionLabel="Proceed to absolute voting"
+      secondaryActionLabel="Proceed to Group Vote"
       onSecondaryAction={enableAbsoluteVoting}
     />
   }
 
   return (
     <main className="screen voting-screen">
-      <span className="eyebrow">{game.absoluteVotingEnabled ? `Open vote · ${game.currentVoterIndex + 1} of ${game.players.length}` : `${voter.name}’s secret ballot`}</span>
-      <h1>Who is the impostor?</h1>
-      <p>{game.absoluteVotingEnabled ? 'Everyone can see this ballot. Vote together, then lock it in.' : 'Your choice stays hidden after you lock it in.'}</p>
-      <div className="ballot-grid" role="group" aria-label="Vote for one player">
-        {game.players.filter((player) => player.id !== voter.id).map((player) => (
-          <button aria-pressed={pendingVote === player.id} className={pendingVote === player.id ? 'selected' : ''} type="button" key={player.id} onClick={() => castVote(player.id)}>{player.name}</button>
+      <span className="eyebrow">{isGroupVote ? 'Group Vote' : `${voter.name}’s secret ballot`}</span>
+      <h1>Who should be voted out?</h1>
+      <p>{isGroupVote
+        ? `Everyone chooses together. Select up to ${game.impostorCount} player${game.impostorCount === 1 ? '' : 's'}, then lock in the result.`
+        : `Choose up to ${game.impostorCount} player${game.impostorCount === 1 ? '' : 's'}. Your choice stays hidden after you lock it in.`}</p>
+      <div className="ballot-grid" role="group" aria-label={`Vote for up to ${game.impostorCount} player${game.impostorCount === 1 ? '' : 's'}`}>
+        {game.players.filter((player) => isGroupVote || player.id !== voter.id).map((player) => (
+          <button aria-pressed={selectedIds.includes(player.id)} className={selectedIds.includes(player.id) ? 'selected' : ''} type="button" key={player.id} onClick={() => castVote(player.id)}>{player.name}</button>
         ))}
-        <button aria-pressed={pendingVote === null} className={`skip ${pendingVote === null ? 'selected' : ''}`} type="button" onClick={() => castVote(null)}>Skip vote</button>
+        {!isGroupVote && <button aria-pressed={pendingVote === null} className={`skip ${pendingVote === null ? 'selected' : ''}`} type="button" onClick={() => castVote(null)}>Skip vote</button>}
       </div>
-      <button className="button button--hero" type="button" disabled={pendingVote === undefined} onClick={confirmVote}>Lock in vote</button>
+      <button className="button button--hero" type="button" disabled={pendingVote === undefined || (Array.isArray(pendingVote) && pendingVote.length === 0)} onClick={confirmVote}>{isGroupVote ? 'Decide the vote' : 'Lock in vote'}</button>
     </main>
   )
 }

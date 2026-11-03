@@ -11,18 +11,24 @@ export default function GameOverScreen({ onChangeCategory, onReturnToLobby }: Ga
   const game = useGameStore((state) => state.game)!
   const playAgain = useGameStore((state) => state.playAgain)
   const result = game.voteResult!
-  const eliminated = game.players.find((player) => player.id === result.eliminatedPlayerId)
+  const eliminatedPlayerIds = result.eliminatedPlayerIds
+    ?? (result.eliminatedPlayerId ? [result.eliminatedPlayerId] : [])
+  const eliminated = game.players.filter((player) => eliminatedPlayerIds.includes(player.id))
   const specialOutcomes = calculateSpecialRoleOutcomes(game)
-  const heading = result.isTie ? 'The vote was tied' : eliminated ? `${eliminated.name} was voted out` : 'Nobody was voted out'
+  const heading = eliminated.length === 0
+    ? 'Nobody was voted out'
+    : eliminated.length === 1
+      ? `${eliminated[0].name} was voted out`
+      : `${eliminated.map((player) => player.name).join(' and ')} were voted out`
   const roleLabels: Record<PlayerRole, string> = {
     INNOCENT: 'Innocent',
     IMPOSTOR: 'Impostor',
     JESTER: 'Jester',
     OUTLIER: 'Outlier',
   }
-  const eliminatedVerdict = eliminated?.role === 'IMPOSTOR'
+  const eliminatedVerdict = eliminated.some((player) => player.role === 'IMPOSTOR')
     ? 'You caught an impostor.'
-    : eliminated?.role === 'JESTER'
+    : eliminated.some((player) => player.role === 'JESTER')
       ? 'The Jester got their wish.'
       : 'They were not an impostor.'
 
@@ -30,8 +36,7 @@ export default function GameOverScreen({ onChangeCategory, onReturnToLobby }: Ga
     <main className="screen result-screen">
       <span className="eyebrow">Round complete</span>
       <h1>{heading}</h1>
-      {eliminated && <p className={`verdict verdict--${eliminated.role.toLowerCase()}`}>{eliminatedVerdict}</p>}
-      {result.isTie && <p className="verdict">No one leaves after a tie.</p>}
+      {eliminated.length > 0 && <p className={`verdict verdict--${eliminated[0].role.toLowerCase()}`}>{eliminatedVerdict}</p>}
       <div className="reveal-summary">
         <div><small>Secret word</small><strong>{game.currentWord}</strong></div>
       </div>
@@ -54,13 +59,13 @@ export default function GameOverScreen({ onChangeCategory, onReturnToLobby }: Ga
           {game.players.map((player) => <li className={`role-roster__item role-roster__item--${player.role.toLowerCase()}`} key={player.id}>
             <strong>{player.name}</strong>
             <span>{roleLabels[player.role]}</span>
-            {player.id === result.eliminatedPlayerId && <small>Voted out</small>}
+            {eliminatedPlayerIds.includes(player.id) && <small>Voted out</small>}
           </li>)}
         </ul>
       </section>
       <div className="result-actions">
         <button className="button button--hero" type="button" onClick={() => playAgain()}>Play again</button>
-        <button className="button button--secondary" type="button" onClick={() => playAgain({ absoluteVotingEnabled: true })}>Absolute Voting</button>
+        <button className="button button--secondary" type="button" onClick={() => playAgain({ absoluteVotingEnabled: true })}>Group Vote</button>
         <button className="button button--secondary" type="button" onClick={onChangeCategory}>Change category</button>
         <button className="text-button" type="button" onClick={onReturnToLobby}>Return to lobby</button>
       </div>

@@ -128,7 +128,7 @@ export default function LobbyScreen({ draft: savedDraft, onDraftChange, onBack, 
               <label className={!draft.timerEnabled ? 'field--disabled' : undefined}>Timer minutes<input type="number" min="1" max="60" disabled={!draft.timerEnabled} value={draft.timerMinutes} onChange={(event) => updateDraft({ ...draft, timerMinutes: Math.max(1, Number(event.target.value)) })} /></label>
             </fieldset>
             <fieldset className="rule-group"><legend>Voting</legend>
-              <label className="switch-row"><span><strong>Absolute Voting</strong><small>Vote openly together without passing the device</small></span><input aria-label="Absolute Voting" type="checkbox" checked={draft.absoluteVotingEnabled} onChange={(event) => updateDraft({ ...draft, absoluteVotingEnabled: event.target.checked })} /></label>
+              <label className="switch-row"><span><strong>Group Vote</strong><small>Choose together in one shared ballot</small></span><input aria-label="Group Vote" type="checkbox" checked={draft.absoluteVotingEnabled} onChange={(event) => updateDraft({ ...draft, absoluteVotingEnabled: event.target.checked })} /></label>
             </fieldset>
           </div>
         </section>

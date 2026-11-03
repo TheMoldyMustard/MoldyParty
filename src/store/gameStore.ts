@@ -20,9 +20,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isValidVoteResult(value: unknown, playerIds: Set<string>): boolean {
   if (!isRecord(value) || !isRecord(value.counts) || !Array.isArray(value.topCandidateIds)) return false
   const eliminatedPlayerId = value.eliminatedPlayerId
+  const eliminatedPlayerIds = value.eliminatedPlayerIds
   return Object.entries(value.counts).every(([id, count]) => playerIds.has(id) && Number.isInteger(count) && Number(count) >= 0)
     && value.topCandidateIds.every((id) => typeof id === 'string' && playerIds.has(id))
-    && (eliminatedPlayerId === null || (typeof eliminatedPlayerId === 'string' && playerIds.has(eliminatedPlayerId)))
+    && (eliminatedPlayerId === undefined || eliminatedPlayerId === null || (typeof eliminatedPlayerId === 'string' && playerIds.has(eliminatedPlayerId)))
+    && (eliminatedPlayerIds === undefined || (Array.isArray(eliminatedPlayerIds)
+      && new Set(eliminatedPlayerIds).size === eliminatedPlayerIds.length
+      && eliminatedPlayerIds.every((id) => typeof id === 'string' && playerIds.has(id))))
     && typeof value.isTie === 'boolean'
 }
 
@@ -82,8 +86,12 @@ function isRecoverableGame(value: unknown): value is GameState {
   const votesAreValid = value.votes.every((vote) => isRecord(vote)
     && typeof vote.voterId === 'string'
     && playerIds.has(vote.voterId)
-    && (vote.targetId === null || (typeof vote.targetId === 'string' && playerIds.has(vote.targetId)))
-    && vote.targetId !== vote.voterId)
+    && ((Array.isArray(vote.targetIds)
+      && vote.targetIds.length <= Number(value.impostorCount)
+      && new Set(vote.targetIds).size === vote.targetIds.length
+      && vote.targetIds.every((id) => typeof id === 'string' && playerIds.has(id) && id !== vote.voterId))
+      || (vote.targetId === null || (typeof vote.targetId === 'string' && playerIds.has(vote.targetId)))
+        && vote.targetId !== vote.voterId))
   if (!votesAreValid || value.votes.length > value.players.length) return false
 
   if (value.phase === 'ROLE_REVEAL' || value.phase === 'DISCUSSION') {
@@ -100,7 +108,7 @@ export type LobbyIntent = 'default' | 'category'
 export interface GameStoreState {
   setup: GameSetupInput | null
   game: GameState | null
-  pendingVote: string | null | undefined
+  pendingVote: string[] | null | undefined
   isVoteReady: boolean
   pendingOutlierGuess: string
   isOutlierGuessReady: boolean
@@ -195,7 +203,7 @@ export function createGameStore(
     enableAbsoluteVoting: () => set((state) => state.game?.phase === 'VOTING'
       ? {
           setup: state.setup ? { ...state.setup, absoluteVotingEnabled: true } : state.setup,
-          game: { ...state.game, absoluteVotingEnabled: true },
+          game: { ...state.game, absoluteVotingEnabled: true, votes: [], currentVoterIndex: 0, voteResult: null },
           pendingVote: undefined,
           isVoteReady: true,
         }
@@ -207,20 +215,25 @@ export function createGameStore(
       : state,
     ),
 
-    castVote: (targetId) => set((state) =>
-      state.game?.phase === 'VOTING' && state.isVoteReady
-        ? { pendingVote: targetId }
-        : state,
-    ),
+    castVote: (targetId) => set((state) => {
+      if (state.game?.phase !== 'VOTING' || !state.isVoteReady) return state
+      if (targetId === null) return { pendingVote: null }
+      const selected = Array.isArray(state.pendingVote) ? state.pendingVote : []
+      const next = selected.includes(targetId)
+        ? selected.filter((id) => id !== targetId)
+        : selected.length < state.game.impostorCount ? [...selected, targetId] : selected
+      return { pendingVote: next }
+    }),
 
     confirmVote: () => set((state) => {
       if (!state.game || state.game.phase !== 'VOTING' || state.pendingVote === undefined) {
         return state
       }
+      const game = recordVote(state.game, state.pendingVote)
       return {
-        game: recordVote(state.game, state.pendingVote),
+        game,
         pendingVote: undefined,
-        isVoteReady: state.game.absoluteVotingEnabled && state.game.currentVoterIndex < state.game.players.length - 1,
+        isVoteReady: game.absoluteVotingEnabled && game.phase === 'VOTING',
       }
     }),
 
@@ -353,7 +366,12 @@ export function createGameStore(
         ...current,
         ...saved,
         setup: normalizePersistedSetup(saved.setup),
-        game: saved.game ? { ...saved.game, isRoleVisible: false, absoluteVotingEnabled: saved.game.absoluteVotingEnabled === true } : null,
+        game: saved.game ? {
+          ...saved.game,
+          isRoleVisible: false,
+          absoluteVotingEnabled: saved.game.absoluteVotingEnabled === true,
+          groupVote: Array.isArray(saved.game.groupVote) ? saved.game.groupVote : null,
+        } : null,
         pendingVote: undefined,
         isVoteReady: saved.game?.phase === 'VOTING' && saved.game.absoluteVotingEnabled === true,
         pendingOutlierGuess: '',
@@ -367,7 +385,7 @@ export function createGameStore(
       if (version >= 2) {
         const setup = normalizePersistedSetup(saved.setup)
         const game = isRecord(saved.game)
-          ? { ...saved.game, absoluteVotingEnabled: saved.game.absoluteVotingEnabled === true, isRoleVisible: false }
+          ? { ...saved.game, absoluteVotingEnabled: saved.game.absoluteVotingEnabled === true, groupVote: null, isRoleVisible: false }
           : null
         return { ...saved, setup, game }
       }
@@ -379,6 +397,7 @@ export function createGameStore(
         outlierEnabled: saved.game.outlierEnabled ?? false,
         outlierHintsEnabled: saved.game.outlierHintsEnabled ?? false,
         absoluteVotingEnabled: false,
+        groupVote: null,
         currentOutlierGuessIndex: saved.game.currentOutlierGuessIndex ?? 0,
         outlierGuesses: saved.game.outlierGuesses ?? [],
         isRoleVisible: false,
