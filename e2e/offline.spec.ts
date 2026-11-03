@@ -2,7 +2,10 @@ import { expect, test } from '@playwright/test'
 
 test('a saved custom pack remains available after an offline reload', async ({ page, context }) => {
   await page.goto('/')
-  await page.getByRole('button', { name: /set up a round/i }).click()
+  await page.getByRole('button', { name: 'Open Impostor' }).click()
+  await page.getByRole('button', { name: 'Create new session' }).click()
+  await page.getByLabel('Session name').fill('Offline Session')
+  await page.getByRole('button', { name: 'Set up session' }).click()
   await page.getByRole('button', { name: 'Manage custom packs' }).click()
 
   await page.getByLabel('Pack name').fill('Offline Friends')
@@ -18,7 +21,10 @@ test('a saved custom pack remains available after an offline reload', async ({ p
   await page.reload()
 
   await expect(page.getByRole('heading', { name: 'MoldyParty' })).toBeVisible()
-  await page.getByRole('button', { name: /set up a round/i }).click()
+  await page.getByRole('button', { name: 'Open Impostor' }).click()
+  await page.getByRole('button', { name: 'Create new session' }).click()
+  await page.getByLabel('Session name').fill('Offline Reload')
+  await page.getByRole('button', { name: 'Set up session' }).click()
   await page.getByRole('button', { name: 'Manage custom packs' }).click()
   await expect(page.getByText('Offline Friends')).toBeVisible()
 })

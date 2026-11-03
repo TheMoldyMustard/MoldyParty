@@ -6,11 +6,12 @@ import GameOverScreen from './features/game/GameOverScreen'
 import LobbyScreen, { type LobbyDraft } from './features/game/LobbyScreen'
 import OutlierGuessScreen from './features/game/OutlierGuessScreen'
 import RoleRevealScreen from './features/game/RoleRevealScreen'
+import SessionManagerScreen from './features/game/SessionManagerScreen'
 import VotingScreen from './features/game/VotingScreen'
 import PackManager from './features/packs/PackManager'
-import { useGameStore } from './store/gameStore'
+import { gameStore, useGameStore } from './store/gameStore'
 
-type AppView = 'home' | 'lobby' | 'packs'
+type AppView = 'home' | 'sessions' | 'lobby' | 'packs'
 
 function AppContent() {
   const [view, setView] = useState<AppView>('home')
@@ -20,17 +21,28 @@ function AppContent() {
   const game = useGameStore((state) => state.game)
   const changeCategory = useGameStore((state) => state.changeCategory)
   const returnToLobby = useGameStore((state) => state.returnToLobby)
+  const createSession = useGameStore((state) => state.createSession)
+  const continueSession = useGameStore((state) => state.continueSession)
+  const activeSessionId = useGameStore((state) => state.activeSessionId)
 
   if (game?.phase === 'ROLE_REVEAL') return <RoleRevealScreen key={game.currentRevealIndex} />
   if (game?.phase === 'DISCUSSION') return <DiscussionScreen />
   if (game?.phase === 'VOTING') return <VotingScreen />
   if (game?.phase === 'OUTLIER_GUESS') return <OutlierGuessScreen />
   if (game?.phase === 'GAME_OVER') return <GameOverScreen
-    onChangeCategory={() => { changeCategory(); setView('lobby') }}
-    onReturnToLobby={() => { returnToLobby(); setView('home') }}
+    onChangeCategory={() => { changeCategory(); setView('sessions') }}
+    onReturnToLobby={() => { returnToLobby(); setView('sessions') }}
   />
 
-  if (view === 'lobby') return <LobbyScreen draft={lobbyDraft} preferredPackId={preferredPackId} onPreferredPackApplied={() => setPreferredPackId(null)} notice={lobbyNotice} onDraftChange={setLobbyDraft} onBack={() => setView('home')} onManagePacks={() => setView('packs')} />
+  if (view === 'sessions') return <SessionManagerScreen
+    onBack={() => setView('home')}
+    onCreate={(name) => { createSession(name); setLobbyDraft(null); setView('lobby') }}
+    onContinue={(sessionId) => {
+      continueSession(sessionId)
+      if (!gameStore.getState().game) setView('lobby')
+    }}
+  />
+  if (view === 'lobby') return <LobbyScreen draft={lobbyDraft} preferredPackId={preferredPackId} onPreferredPackApplied={() => setPreferredPackId(null)} notice={lobbyNotice} onDraftChange={setLobbyDraft} onBack={() => setView('sessions')} onManagePacks={() => setView('packs')} rosterLocked={activeSessionId !== null} />
   if (view === 'packs') return <main className="screen"><nav className="topbar"><button className="text-button" onClick={() => setView('lobby')}>← Back to setup</button></nav><PackManager onImported={(packId) => { setPreferredPackId(packId); setLobbyNotice('Pack imported and ready in your round.'); setView('lobby') }} /></main>
 
   return (
@@ -51,7 +63,7 @@ function AppContent() {
           <span className="pill">Launch game</span>
           <h2 id="impostor-title">Impostor</h2>
           <p>Find the impostors before they blend in.</p>
-          <button type="button" onClick={() => setView('lobby')}>Set up a round <span aria-hidden="true">→</span></button>
+          <button type="button" onClick={() => setView('sessions')}>Open Impostor <span aria-hidden="true">→</span></button>
         </div>
       </section>
 

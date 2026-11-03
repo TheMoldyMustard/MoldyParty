@@ -1,14 +1,15 @@
 interface PlayerEditorProps {
   names: string[]
   onChange: (names: string[]) => void
+  locked?: boolean
 }
 
-export default function PlayerEditor({ names, onChange }: PlayerEditorProps) {
+export default function PlayerEditor({ names, onChange, locked = false }: PlayerEditorProps) {
   return (
     <section className="setup-section" aria-labelledby="players-title">
       <div className="section-heading">
         <div><span className="step-number">01</span><h2 id="players-title">Who’s playing?</h2></div>
-        <span className="muted">3 minimum</span>
+        <span className="muted">{locked ? 'Session roster' : '3 minimum'}</span>
       </div>
       <div className="player-list">
         {names.map((name, index) => (
@@ -20,9 +21,10 @@ export default function PlayerEditor({ names, onChange }: PlayerEditorProps) {
               value={name}
               placeholder={`Player ${index + 1}`}
               autoComplete="off"
+              disabled={locked}
               onChange={(event) => onChange(names.map((item, itemIndex) => itemIndex === index ? event.target.value : item))}
             />
-            {names.length > 3 && (
+            {!locked && names.length > 3 && (
               <button
                 className="icon-button"
                 type="button"
@@ -33,7 +35,7 @@ export default function PlayerEditor({ names, onChange }: PlayerEditorProps) {
           </div>
         ))}
       </div>
-      <button className="button button--secondary button--wide" type="button" onClick={() => onChange([...names, ''])}>
+      <button className="button button--secondary button--wide" type="button" disabled={locked} onClick={() => onChange([...names, ''])}>
         <span aria-hidden="true">＋</span> Add player
       </button>
     </section>

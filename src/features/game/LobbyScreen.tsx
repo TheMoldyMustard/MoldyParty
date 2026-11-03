@@ -28,6 +28,7 @@ interface LobbyScreenProps {
   preferredPackId?: string | null
   onPreferredPackApplied?: () => void
   notice?: string
+  rosterLocked?: boolean
 }
 
 function draftFromSetup(setup: GameSetupInput | null): LobbyDraft {
@@ -45,7 +46,7 @@ function draftFromSetup(setup: GameSetupInput | null): LobbyDraft {
   }
 }
 
-export default function LobbyScreen({ draft: savedDraft, onDraftChange, onBack, onManagePacks, preferredPackId, onPreferredPackApplied, notice }: LobbyScreenProps) {
+export default function LobbyScreen({ draft: savedDraft, onDraftChange, onBack, onManagePacks, preferredPackId, onPreferredPackApplied, notice, rosterLocked = false }: LobbyScreenProps) {
   const previousSetup = useGameStore((state) => state.setup)
   const startGame = useGameStore((state) => state.startGame)
   const [draft, setDraft] = useState<LobbyDraft>(() => savedDraft ?? draftFromSetup(previousSetup))
@@ -107,7 +108,7 @@ export default function LobbyScreen({ draft: savedDraft, onDraftChange, onBack, 
       <header className="screen-heading"><span className="eyebrow">Build your round</span><h1>Who can you trust?</h1><p>Set up the table, then pass the device around.</p></header>
       {notice && <p className="status-message" role="status">{notice}</p>}
       <div className="setup-layout">
-        <PlayerEditor names={draft.playerNames} onChange={updatePlayerNames} />
+        <PlayerEditor names={draft.playerNames} onChange={updatePlayerNames} locked={rosterLocked} />
         <CategoryPicker packs={packs} selectedId={draft.selectedPackId} onSelect={(selectedPackId) => updateDraft({ ...draft, selectedPackId })} onManagePacks={onManagePacks} />
         <section className="setup-section" aria-labelledby="rules-title">
           <div className="section-heading"><div><span className="step-number">03</span><h2 id="rules-title">Round rules</h2></div></div>

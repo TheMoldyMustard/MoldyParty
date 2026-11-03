@@ -1,6 +1,7 @@
 import { useGameStore } from '../../store/gameStore'
 import { calculateSpecialRoleOutcomes } from '../../domain/game'
 import type { PlayerRole } from '../../domain/types'
+import SessionStatsTable from './SessionStatsTable'
 
 interface GameOverScreenProps {
   onChangeCategory: () => void
@@ -10,6 +11,8 @@ interface GameOverScreenProps {
 export default function GameOverScreen({ onChangeCategory, onReturnToLobby }: GameOverScreenProps) {
   const game = useGameStore((state) => state.game)!
   const playAgain = useGameStore((state) => state.playAgain)
+  const activeSessionId = useGameStore((state) => state.activeSessionId)
+  const session = useGameStore((state) => activeSessionId ? state.sessionsById[activeSessionId] : null)
   const result = game.voteResult!
   const eliminatedPlayerIds = result.eliminatedPlayerIds
     ?? (result.eliminatedPlayerId ? [result.eliminatedPlayerId] : [])
@@ -63,6 +66,10 @@ export default function GameOverScreen({ onChangeCategory, onReturnToLobby }: Ga
           </li>)}
         </ul>
       </section>
+      {session && <section className="session-result-stats" aria-labelledby="session-stats-title">
+        <h2 id="session-stats-title">Session stats</h2>
+        <SessionStatsTable session={session} />
+      </section>}
       <div className="result-actions">
         <button className="button button--hero" type="button" onClick={() => playAgain()}>Play again</button>
         <button className="button button--secondary" type="button" onClick={() => playAgain({ absoluteVotingEnabled: true })}>Group Vote</button>

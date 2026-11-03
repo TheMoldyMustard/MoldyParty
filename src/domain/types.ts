@@ -51,6 +51,27 @@ export interface SpecialRoleOutcome {
   reason: string
 }
 
+export type RoleCounter = Record<PlayerRole, number>
+
+export interface OutcomeCounter {
+  total: number
+  byRole: RoleCounter
+}
+
+export interface PlayerStats {
+  roundsPlayed: number
+  rolesPlayed: RoleCounter
+  correctImpostorGuesses: number
+  wrongImpostorGuesses: number
+  votesForJester: number
+  votedOutAsJester: number
+  correctOutlierGuesses: number
+  wins: OutcomeCounter
+  losses: OutcomeCounter
+}
+
+export type RoundStatsDelta = Record<string, PlayerStats>
+
 export interface GameState {
   phase: GamePhase
   round: number
@@ -74,6 +95,7 @@ export interface GameState {
   voteResult: VoteResult | null
   currentOutlierGuessIndex: number
   outlierGuesses: OutlierGuessRecord[]
+  statsRecorded?: boolean
 }
 
 export interface GameSetupInput {
@@ -87,6 +109,23 @@ export interface GameSetupInput {
   absoluteVotingEnabled: boolean
   discussionDurationSeconds: number | null
   round?: number
+}
+
+export interface SessionPlayer {
+  id: string
+  name: string
+}
+
+export interface SessionRecord {
+  id: string
+  name: string
+  createdAt: string
+  updatedAt: string
+  completedRounds: number
+  players: SessionPlayer[]
+  setup: GameSetupInput
+  statsByPlayerId: Record<string, PlayerStats>
+  currentGame: GameState | null
 }
 
 export type SetupErrors = string[]

@@ -116,6 +116,7 @@ export function createRound(input: GameSetupInput, random: () => number = Math.r
     voteResult: null,
     currentOutlierGuessIndex: 0,
     outlierGuesses: [],
+    statsRecorded: false,
   }
 }
 

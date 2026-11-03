@@ -23,6 +23,216 @@ const setup: GameSetupInput = {
 describe('game store', () => {
   beforeEach(() => localStorage.clear())
 
+  function completePrivateRound(store: ReturnType<typeof createGameStore>) {
+    store.getState().confirmRole(); store.getState().confirmRole(); store.getState().confirmRole()
+    store.getState().beginVoting()
+    for (const targetId of ['player-2', 'player-1', 'player-2']) {
+      store.getState().showVote()
+      store.getState().castVote(targetId)
+      store.getState().confirmVote()
+    }
+  }
+
+  it('creates a named local session when its first round starts', () => {
+    const store = createGameStore('named-session', () => 0, localStorage, () => 1_000, () => 'session-1')
+
+    store.getState().createSession(' Friday Crew ')
+    store.getState().startGame(setup)
+
+    expect(store.getState().activeSessionId).toBe('session-1')
+    expect(store.getState().sessionsById['session-1']).toMatchObject({
+      id: 'session-1',
+      name: 'Friday Crew',
+      completedRounds: 0,
+      players: [
+        { id: 'player-1', name: 'Alex' },
+        { id: 'player-2', name: 'Blair' },
+        { id: 'player-3', name: 'Casey' },
+      ],
+    })
+  })
+
+  it('commits completed-round stats exactly once', async () => {
+    const store = createGameStore('session-stats', () => 0, localStorage, () => 1_000, () => 'session-1')
+    store.getState().createSession('Friday Crew')
+    store.getState().startGame(setup)
+
+    completePrivateRound(store)
+
+    expect(store.getState().sessionsById['session-1']).toMatchObject({
+      completedRounds: 1,
+      statsByPlayerId: {
+        'player-1': { roundsPlayed: 1, correctImpostorGuesses: 1, wins: { total: 1 } },
+        'player-2': { roundsPlayed: 1, losses: { total: 1 } },
+        'player-3': { roundsPlayed: 1, correctImpostorGuesses: 1, wins: { total: 1 } },
+      },
+    })
+
+    const restored = createGameStore('session-stats', () => 0, localStorage, () => 1_000, () => 'unused')
+    await restored.persist.rehydrate()
+    expect(restored.getState().sessionsById['session-1'].completedRounds).toBe(1)
+    expect(restored.getState().sessionsById['session-1'].statsByPlayerId['player-1'].roundsPlayed).toBe(1)
+
+    restored.getState().playAgain()
+    completePrivateRound(restored)
+    expect(restored.getState().sessionsById['session-1'].completedRounds).toBe(2)
+    expect(restored.getState().sessionsById['session-1'].statsByPlayerId['player-1'].roundsPlayed).toBe(2)
+  })
+
+  it('continues saved sessions without mixing their rounds or stats', () => {
+    const ids = ['session-1', 'session-2']
+    const store = createGameStore('session-isolation', () => 0, localStorage, () => 1_000, () => ids.shift()!)
+    store.getState().createSession('Friday Crew')
+    store.getState().startGame(setup)
+    completePrivateRound(store)
+    store.getState().returnToLobby()
+
+    store.getState().createSession('Saturday Crew')
+    store.getState().startGame({ ...setup, playerNames: ['Dee', 'Emery', 'Frankie'] })
+    store.getState().returnToLobby()
+    store.getState().continueSession('session-1')
+
+    expect(store.getState().activeSessionId).toBe('session-1')
+    expect(store.getState().setup?.playerNames).toEqual(['Alex', 'Blair', 'Casey'])
+    expect(store.getState().sessionsById['session-1'].completedRounds).toBe(1)
+    expect(store.getState().sessionsById['session-2'].completedRounds).toBe(0)
+  })
+
+  it('deletes only the selected local session', () => {
+    const ids = ['session-1', 'session-2']
+    const store = createGameStore('delete-session', () => 0, localStorage, () => 1_000, () => ids.shift()!)
+    store.getState().createSession('Friday Crew')
+    store.getState().startGame(setup)
+    store.getState().returnToLobby()
+    store.getState().createSession('Saturday Crew')
+    store.getState().startGame({ ...setup, playerNames: ['Dee', 'Emery', 'Frankie'] })
+
+    store.getState().deleteSession('session-1')
+
+    expect(store.getState().sessionsById['session-1']).toBeUndefined()
+    expect(store.getState().sessionsById['session-2']?.name).toBe('Saturday Crew')
+    expect(store.getState().activeSessionId).toBe('session-2')
+  })
+
+  it('resumes the unfinished round stored with a continued session', () => {
+    const store = createGameStore('resume-session', () => 0, localStorage, () => 1_000, () => 'session-1')
+    store.getState().createSession('Friday Crew')
+    store.getState().startGame(setup)
+    store.getState().confirmRole()
+    store.getState().returnToLobby()
+
+    store.getState().continueSession('session-1')
+
+    expect(store.getState().game).toMatchObject({ phase: 'ROLE_REVEAL', currentRevealIndex: 1 })
+  })
+
+  it('preserves player identity when starting the next round of a saved session', () => {
+    const store = createGameStore('stable-roster', () => 0, localStorage, () => 1_000, () => 'session-1')
+    store.getState().createSession('Friday Crew')
+    store.getState().startGame(setup)
+    store.getState().returnToLobby()
+    store.getState().continueSession('session-1')
+
+    store.getState().startGame({ ...setup, playerNames: ['Changed', 'Names', 'Here'] })
+
+    expect(store.getState().game?.players.map((player) => player.name)).toEqual(['Alex', 'Blair', 'Casey'])
+  })
+
+  it('migrates a version 3 in-progress game into a local session', async () => {
+    const source = createGameStore('v3-source', () => 0, localStorage, () => 1_000, () => 'source')
+    source.getState().startGame(setup)
+    source.getState().confirmRole()
+    localStorage.setItem('v3-session-migration', JSON.stringify({
+      state: {
+        setup: source.getState().setup,
+        game: source.getState().game,
+        lobbyIntent: 'default',
+      },
+      version: 3,
+    }))
+
+    const restored = createGameStore('v3-session-migration', () => 0, localStorage, () => 2_000, () => 'recovered-session')
+    await restored.persist.rehydrate()
+
+    expect(restored.getState().activeSessionId).toBe('recovered-session')
+    expect(restored.getState().sessionsById['recovered-session']).toMatchObject({
+      name: 'Recovered Session',
+      completedRounds: 0,
+      currentGame: { phase: 'ROLE_REVEAL', currentRevealIndex: 1 },
+    })
+  })
+
+  it('drops a malformed version 4 session without deleting valid sessions', async () => {
+    const source = createGameStore('v4-source', () => 0, localStorage, () => 1_000, () => 'valid-session')
+    source.getState().createSession('Valid')
+    source.getState().startGame(setup)
+    const valid = source.getState().sessionsById['valid-session']
+    localStorage.setItem('v4-session-validation', JSON.stringify({
+      state: {
+        setup: null,
+        game: null,
+        sessionsById: {
+          'valid-session': valid,
+          broken: { id: 'broken', name: 'Broken', players: [], statsByPlayerId: { nope: -1 } },
+        },
+        activeSessionId: null,
+      },
+      version: 4,
+    }))
+
+    const restored = createGameStore('v4-session-validation', () => 0)
+    await restored.persist.rehydrate()
+
+    expect(Object.keys(restored.getState().sessionsById)).toEqual(['valid-session'])
+  })
+
+  it('rejects malformed active games and clears their detached projection', async () => {
+    const source = createGameStore('v4-invalid-game-source', () => 0, localStorage, () => 1_000, () => 'invalid-session')
+    source.getState().createSession('Invalid')
+    source.getState().startGame(setup)
+    const invalid = structuredClone(source.getState().sessionsById['invalid-session'])
+    invalid.currentGame!.players[0].id = 'detached-player'
+    localStorage.setItem('v4-invalid-game', JSON.stringify({
+      state: {
+        sessionsById: { 'invalid-session': invalid },
+        activeSessionId: 'invalid-session',
+        setup,
+        game: source.getState().game,
+      },
+      version: 4,
+    }))
+
+    const restored = createGameStore('v4-invalid-game', () => 0)
+    await restored.persist.rehydrate()
+
+    expect(restored.getState().sessionsById).toEqual({})
+    expect(restored.getState().activeSessionId).toBeNull()
+    expect(restored.getState().setup).toBeNull()
+    expect(restored.getState().game).toBeNull()
+  })
+
+  it('derives the active game from the validated session instead of a detached persisted copy', async () => {
+    const source = createGameStore('v4-canonical-source', () => 0, localStorage, () => 1_000, () => 'valid-session')
+    source.getState().createSession('Valid')
+    source.getState().startGame(setup)
+    const session = source.getState().sessionsById['valid-session']
+    localStorage.setItem('v4-canonical-session', JSON.stringify({
+      state: {
+        sessionsById: { 'valid-session': session },
+        activeSessionId: 'valid-session',
+        setup: { ...setup, playerNames: ['Wrong', 'Names', 'Here'] },
+        game: { ...source.getState().game, phase: 'GAME_OVER', voteResult: null },
+      },
+      version: 4,
+    }))
+
+    const restored = createGameStore('v4-canonical-session', () => 0)
+    await restored.persist.rehydrate()
+
+    expect(restored.getState().setup?.playerNames).toEqual(['Alex', 'Blair', 'Casey'])
+    expect(restored.getState().game?.phase).toBe('ROLE_REVEAL')
+  })
+
   it('moves from lobby through private role reveals into discussion', () => {
     const store = createGameStore('role-flow', () => 0)
     store.getState().startGame(setup)
@@ -234,11 +444,15 @@ describe('game store', () => {
       playerNames: ['Alex', 'Blair', 'Casey', 'Devon'],
       outlierEnabled: true,
     })
-    store.setState((state) => ({
-      game: state.game ? { ...state.game, phase: 'OUTLIER_GUESS' } : null,
-      isOutlierGuessReady: true,
-      pendingOutlierGuess: 'Moon',
-    }))
+    store.getState().confirmRole(); store.getState().confirmRole(); store.getState().confirmRole(); store.getState().confirmRole()
+    store.getState().beginVoting()
+    for (const targetId of ['player-2', 'player-1', 'player-2', 'player-2']) {
+      store.getState().showVote()
+      store.getState().castVote(targetId)
+      store.getState().confirmVote()
+    }
+    store.getState().showOutlierGuess()
+    store.getState().setOutlierGuess('Moon')
 
     const restored = createGameStore('private-outlier-guess', () => 0)
     await restored.persist.rehydrate()

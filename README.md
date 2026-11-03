@@ -33,13 +33,20 @@ Install Playwright's browser once on a new machine with `npx playwright install 
 
 ## How the game works
 
-1. Add at least three uniquely named players.
-2. Choose fewer impostors than players, a built-in or custom category, optional hints, and an optional discussion timer. You can also enable one Jester and one Outlier, while leaving at least one Innocent in the round.
-3. Pass the device. Each player deliberately holds the reveal surface to see their role; releasing it masks the secret immediately. The Jester tries to get voted out. The Outlier tries to guess the word and receives no hint unless the dedicated Outlier hint setting is enabled.
-4. Discuss until the group chooses to proceed. The timer never advances the game automatically.
-5. Vote privately by passing the device again, or enable **Group Vote** in setup for one shared ballot without the voting handoff. Select up to the number of impostors in either mode; private voters cannot select themselves. If you forgot to enable it, the voting handoff offers **Proceed to Group Vote**. The result screen offers Group Vote as a shortcut for the next round.
-6. If an Outlier is enabled, pass the device privately to them after voting. They say their guess aloud and enter the same word so the game can validate it. Matching ignores surrounding whitespace and letter case; being voted out does not affect the Outlier's result.
-7. The selected candidate or candidates are revealed. A tie votes out all tied leaders; an all-skipped private ballot eliminates nobody. The secret word, special-role outcomes, and every player's role are then shown.
+1. Open **Impostor**, then create a named local session or continue one you already saved. A session keeps the same player roster and cumulative stats across completed rounds.
+2. Add at least three uniquely named players.
+3. Choose fewer impostors than players, a built-in or custom category, optional hints, and an optional discussion timer. You can also enable one Jester and one Outlier, while leaving at least one Innocent in the round.
+4. Pass the device. Each player deliberately holds the reveal surface to see their role; releasing it masks the secret immediately. The Jester tries to get voted out. The Outlier tries to guess the word and receives no hint unless the dedicated Outlier hint setting is enabled.
+5. Discuss until the group chooses to proceed. The timer never advances the game automatically.
+6. Vote privately by passing the device again, or enable **Group Vote** in setup for one shared ballot without the voting handoff. Select up to the number of impostors in either mode; private voters cannot select themselves. If you forgot to enable it, the voting handoff offers **Proceed to Group Vote**. The result screen offers Group Vote as a shortcut for the next round.
+7. If an Outlier is enabled, pass the device privately to them after voting. They say their guess aloud and enter the same word so the game can validate it. Matching ignores surrounding whitespace and letter case; being voted out does not affect the Outlier's result.
+8. The selected candidate or candidates are revealed. A tie votes out all tied leaders; an all-skipped private ballot eliminates nobody. The secret word, special-role outcomes, every player's role, and the session stats table are then shown.
+
+## Local sessions and statistics
+
+Clicking **Impostor** opens the local session manager. From there you can create a new named session, continue a saved session, inspect its statistics table, or permanently delete it after confirmation. Sessions are stored only in the current browser profile.
+
+Each completed round tracks every player's role appearances, total and per-role wins/losses, correct Impostor votes, wrong Innocent guesses, votes for the Jester, times voted out as Jester, and correct Outlier word guesses. Private ballots can be attributed to individual players. Group Vote still affects role wins and losses, but it does not add individual vote-accuracy or Jester-vote credit because the ballot has no individual voter.
 
 ## Custom packs
 
@@ -66,11 +73,11 @@ Each new-format item contains five hints; one is selected randomly when the roun
 
 - React, TypeScript, Vite, and Tailwind CSS provide the responsive interface.
 - Pure functions in `src/domain` own validation, role assignment, phase transitions, ballots, ties, and results. Voting can be private (pass-device) or Group Vote (one public/no-handoff ballot); both use the same elimination result rules.
-- Zustand coordinates the finite-state lifecycle (`LOBBY → ROLE_REVEAL → DISCUSSION → VOTING → OUTLIER_GUESS? → GAME_OVER`) and persists in-progress recovery.
+- Zustand coordinates the finite-state lifecycle (`LOBBY → ROLE_REVEAL → DISCUSSION → VOTING → OUTLIER_GUESS? → GAME_OVER`) and persists the local session registry, aggregate stats, and in-progress recovery.
 - Dexie stores custom packs in IndexedDB.
 - `vite-plugin-pwa`/Workbox precaches the application shell and supplies an offline navigation fallback.
 - Vitest and Testing Library verify rules and interaction behavior; Playwright verifies complete desktop/mobile and offline journeys.
 
 ## Offline and privacy notes
 
-MoldyParty does not transmit gameplay or custom-pack data. Role reveals, ballots, and unfinished Outlier guesses are remasked after privacy is lost or a saved round is restored. Clearing browser storage, using private browsing, or uninstalling with site-data removal can erase local packs and an in-progress round, so export important packs as JSON. The first visit must be online; subsequent production-build visits can load from the service worker cache.
+MoldyParty does not transmit gameplay, session statistics, or custom-pack data. Role reveals, ballots, and unfinished Outlier guesses are remasked after privacy is lost or a saved round is restored. Clearing browser storage, using private browsing, deleting a session, or uninstalling with site-data removal can erase local session stats, packs, and in-progress rounds, so export important packs as JSON. The first visit must be online; subsequent production-build visits can load from the service worker cache.

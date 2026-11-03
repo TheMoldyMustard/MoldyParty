@@ -10,7 +10,10 @@ import { gameStore } from '../../store/gameStore'
 async function openConfiguredLobby() {
   const user = userEvent.setup()
   render(<App />)
-  await user.click(screen.getByRole('button', { name: /set up a round/i }))
+  await user.click(screen.getByRole('button', { name: /open impostor/i }))
+  await user.click(screen.getByRole('button', { name: 'Create new session' }))
+  await user.type(screen.getByLabelText('Session name'), 'Session 1')
+  await user.click(screen.getByRole('button', { name: 'Set up session' }))
   const nameInputs = screen.getAllByLabelText(/player \d+ name/i)
   await user.clear(nameInputs[0]); await user.type(nameInputs[0], 'Alex')
   await user.clear(nameInputs[1]); await user.type(nameInputs[1], 'Blair')
@@ -35,6 +38,9 @@ describe('Impostor game interface', () => {
     gameStore.setState({
       setup: null,
       game: null,
+      sessionsById: {},
+      activeSessionId: null,
+      pendingSessionName: null,
       pendingVote: undefined,
       isVoteReady: false,
       pendingOutlierGuess: '',
@@ -345,6 +351,8 @@ describe('Impostor game interface', () => {
     }
 
     expect(screen.getByRole('heading', { name: 'Nobody was voted out' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Session stats' })).toBeInTheDocument()
+    expect(screen.getByRole('table', { name: 'Session 1 session stats' })).toHaveTextContent('Alex')
     await user.click(screen.getByRole('button', { name: 'Group Vote' }))
     expect(gameStore.getState().game?.absoluteVotingEnabled).toBe(true)
     expect(gameStore.getState().setup?.absoluteVotingEnabled).toBe(true)
