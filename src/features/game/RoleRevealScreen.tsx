@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../store/gameStore'
 
 const REVEAL_DISTANCE_PX = 56
+const MAX_COVER_OFFSET_PX = 320
 
 export default function RoleRevealScreen() {
   const game = useGameStore((state) => state.game)!
@@ -9,6 +10,7 @@ export default function RoleRevealScreen() {
   const hideRole = useGameStore((state) => state.hideRole)
   const confirmRole = useGameStore((state) => state.confirmRole)
   const [hasRevealed, setHasRevealed] = useState(false)
+  const [coverOffset, setCoverOffset] = useState(0)
   const gestureStart = useRef<{ pointerId: number; x: number; y: number } | null>(null)
   const player = game.players[game.currentRevealIndex]
 
@@ -26,7 +28,11 @@ export default function RoleRevealScreen() {
   })()
 
   useEffect(() => {
-    const mask = () => hideRole()
+    const mask = () => {
+      gestureStart.current = null
+      setCoverOffset(0)
+      hideRole()
+    }
     const maskWhenHidden = () => { if (document.visibilityState !== 'visible') hideRole() }
     window.addEventListener('blur', mask)
     window.addEventListener('pointercancel', mask)
@@ -38,7 +44,11 @@ export default function RoleRevealScreen() {
     }
   }, [hideRole])
 
-  function reveal() { setHasRevealed(true); showRole() }
+  function reveal() {
+    setHasRevealed(true)
+    setCoverOffset(MAX_COVER_OFFSET_PX)
+    showRole()
+  }
 
   return (
     <main className="screen private-screen">
@@ -47,10 +57,19 @@ export default function RoleRevealScreen() {
       <h1>Pass to {player.name}</h1>
       <p>Shield the screen. Only {player.name} should look.</p>
 
-      <button
-        className="reveal-pad"
-        type="button"
-        aria-label="Drag up to reveal your role"
+      <div className="reveal-stage">
+        <span
+          className={`role-card role-card--${player.role.toLowerCase()}`}
+          data-testid="private-role"
+          aria-hidden={!game.isRoleVisible}
+        >
+          {roleContent}
+        </span>
+        <button
+          className="reveal-curtain"
+          type="button"
+          aria-label="Drag up to reveal your role"
+          style={{ transform: `translateY(-${coverOffset}px)` }}
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture?.(event.pointerId)
           gestureStart.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY }
@@ -60,22 +79,22 @@ export default function RoleRevealScreen() {
           if (!start || start.pointerId !== event.pointerId || game.isRoleVisible) return
           const deltaY = start.y - event.clientY
           const deltaX = Math.abs(event.clientX - start.x)
-          if (deltaY >= REVEAL_DISTANCE_PX && deltaY > deltaX) reveal()
+          if (deltaY > deltaX) {
+            setCoverOffset(Math.min(Math.max(0, deltaY), MAX_COVER_OFFSET_PX))
+            if (deltaY >= REVEAL_DISTANCE_PX) reveal()
+          }
         }}
         onPointerUp={(event) => {
           if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
           gestureStart.current = null
         }}
-        onPointerCancel={() => { gestureStart.current = null; hideRole() }}
-        onBlur={hideRole}
+        onPointerCancel={() => { gestureStart.current = null; setCoverOffset(0); hideRole() }}
+        onBlur={() => { if (!game.isRoleVisible) setCoverOffset(0); hideRole() }}
         onKeyDown={(event) => { if (event.key === ' ' || event.key === 'Enter') reveal() }}
-      >
-        {game.isRoleVisible ? (
-          <span className={`role-card role-card--${player.role.toLowerCase()}`} data-testid="private-role">
-            {roleContent}
-          </span>
-        ) : <span className="reveal-instruction"><strong>Drag up to reveal</strong><small>Swipe upward, then tap when you’re done</small></span>}
-      </button>
+        >
+          <span className="reveal-instruction"><strong>Drag up to reveal</strong><small>Swipe upward to lift the cover</small></span>
+        </button>
+      </div>
 
       <button className="button button--secondary" type="button" disabled={!hasRevealed} onClick={confirmRole}>I’ve seen my role</button>
     </main>

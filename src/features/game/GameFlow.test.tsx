@@ -136,7 +136,7 @@ describe('Impostor game interface', () => {
     fireEvent.keyDown(reveal, { key: ' ' })
     expect(screen.getByTestId('private-role')).toBeInTheDocument()
     fireEvent.blur(reveal)
-    expect(screen.queryByTestId('private-role')).not.toBeInTheDocument()
+    expect(screen.getByTestId('private-role')).toHaveAttribute('aria-hidden', 'true')
   })
 
   it('only reveals after an upward drag crosses the gesture threshold', async () => {
@@ -146,12 +146,12 @@ describe('Impostor game interface', () => {
 
     fireEvent.pointerDown(reveal, { pointerId: 1, clientY: 300, clientX: 100 })
     fireEvent.pointerMove(reveal, { pointerId: 1, clientY: 260, clientX: 100 })
-    expect(screen.queryByTestId('private-role')).not.toBeInTheDocument()
+    expect(screen.getByTestId('private-role')).toHaveAttribute('aria-hidden', 'true')
     fireEvent.pointerUp(reveal, { pointerId: 1, clientY: 260, clientX: 100 })
 
     fireEvent.pointerDown(reveal, { pointerId: 2, clientY: 300, clientX: 100 })
     fireEvent.pointerMove(reveal, { pointerId: 2, clientY: 330, clientX: 100 })
-    expect(screen.queryByTestId('private-role')).not.toBeInTheDocument()
+    expect(screen.getByTestId('private-role')).toHaveAttribute('aria-hidden', 'true')
     fireEvent.pointerUp(reveal, { pointerId: 2, clientY: 330, clientX: 100 })
 
     fireEvent.pointerDown(reveal, { pointerId: 3, clientY: 300, clientX: 100 })
