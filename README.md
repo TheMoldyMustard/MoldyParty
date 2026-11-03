@@ -37,8 +37,8 @@ Install Playwright's browser once on a new machine with `npx playwright install 
 2. Choose fewer impostors than players, a built-in or custom category, optional hints, and an optional discussion timer. You can also enable one Jester and one Outlier, while leaving at least one Innocent in the round.
 3. Pass the device. Each player deliberately holds the reveal surface to see their role; releasing it masks the secret immediately. The Jester tries to get voted out. The Outlier tries to guess the word and receives no hint unless the dedicated Outlier hint setting is enabled.
 4. Discuss until the group chooses to proceed. The timer never advances the game automatically.
-5. Vote privately by passing the device again, or enable **Absolute Voting** in setup to vote openly together without the voting handoff. Players may select anyone except themselves or skip. The result screen also offers Absolute Voting as a shortcut for the next round.
-6. If an Outlier is enabled, pass the device privately to them for one guess after voting. Matching ignores surrounding whitespace and letter case; being voted out does not affect the Outlier's result.
+5. Vote privately by passing the device again, or enable **Absolute Voting** in setup to vote openly together without the voting handoff. If you forgot to enable it, the voting handoff also offers **Proceed to absolute voting**. Players may select anyone except themselves or skip. The result screen offers Absolute Voting as a shortcut for the next round.
+6. If an Outlier is enabled, pass the device privately to them after voting. They say their guess aloud and enter the same word so the game can validate it. Matching ignores surrounding whitespace and letter case; being voted out does not affect the Outlier's result.
 7. A unique vote leader is revealed. A tie or all-skipped ballot eliminates nobody. The secret word, special-role outcomes, and every player's role are then shown.
 
 ## Custom packs

@@ -6,12 +6,20 @@ export default function VotingScreen() {
   const isVoteReady = useGameStore((state) => state.isVoteReady)
   const pendingVote = useGameStore((state) => state.pendingVote)
   const showVote = useGameStore((state) => state.showVote)
+  const enableAbsoluteVoting = useGameStore((state) => state.enableAbsoluteVoting)
   const castVote = useGameStore((state) => state.castVote)
   const confirmVote = useGameStore((state) => state.confirmVote)
   const voter = game.players[game.currentVoterIndex]
 
   if (!isVoteReady && !game.absoluteVotingEnabled) {
-    return <PassDeviceMask playerName={voter.name} eyebrow={`Secret vote · ${game.currentVoterIndex + 1} of ${game.players.length}`} actionLabel={`I’m ${voter.name}`} onReady={showVote} />
+    return <PassDeviceMask
+      playerName={voter.name}
+      eyebrow={`Secret vote · ${game.currentVoterIndex + 1} of ${game.players.length}`}
+      actionLabel={`I’m ${voter.name}`}
+      onReady={showVote}
+      secondaryActionLabel="Proceed to absolute voting"
+      onSecondaryAction={enableAbsoluteVoting}
+    />
   }
 
   return (

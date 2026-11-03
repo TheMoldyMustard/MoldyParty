@@ -238,6 +238,21 @@ describe('Impostor game interface', () => {
     expect(screen.getByText('Open vote · 2 of 3')).toBeInTheDocument()
   })
 
+  it('can switch to Absolute Voting from the private voting handoff', async () => {
+    const user = await openConfiguredLobby()
+    await user.click(screen.getByRole('button', { name: 'Start secret round' }))
+    await revealAndConfirm(user, 'Alex')
+    await revealAndConfirm(user, 'Blair')
+    await revealAndConfirm(user, 'Casey')
+    await user.click(screen.getByRole('button', { name: 'Proceed to voting' }))
+
+    expect(screen.getByRole('button', { name: 'Proceed to absolute voting' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Proceed to absolute voting' }))
+
+    expect(screen.queryByRole('heading', { name: 'Pass to Alex' })).not.toBeInTheDocument()
+    expect(screen.getByText(/Everyone can see this ballot/)).toBeInTheDocument()
+  })
+
   it('reveals every player role and each special-role outcome at round end', () => {
     const setup: GameSetupInput = {
       playerNames: ['Alex', 'Blair', 'Casey', 'Devon', 'Emery'],

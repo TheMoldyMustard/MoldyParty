@@ -67,6 +67,25 @@ test('Absolute Voting completes a round without device handoffs', async ({ page 
   await expect(page.getByText('Round 2')).toBeVisible()
 })
 
+test('voting can switch to Absolute Voting after setup', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: /set up a round/i }).click()
+
+  for (const [index, name] of ['Alex', 'Blair', 'Casey'].entries()) {
+    await page.getByLabel(`Player ${index + 1} name`).fill(name)
+  }
+  await page.getByRole('button', { name: 'Start secret round' }).click()
+  await holdReveal(page, 'Alex')
+  await holdReveal(page, 'Blair')
+  await holdReveal(page, 'Casey')
+  await page.getByRole('button', { name: 'Proceed to voting' }).click()
+
+  await page.getByRole('button', { name: 'Proceed to absolute voting' }).click()
+  await expect(page.getByText('Everyone can see this ballot')).toBeVisible()
+  await page.getByRole('group', { name: 'Vote for one player' }).getByRole('button', { name: 'Blair' }).click()
+  await page.getByRole('button', { name: 'Lock in vote' }).click()
+})
+
 test('special roles guess privately and every role is revealed', async ({ page }) => {
   const players = ['Alex', 'Blair', 'Casey', 'Devon', 'Emery']
   await page.goto('/')

@@ -113,6 +113,7 @@ export interface GameStoreState {
   hideRole: () => void
   confirmRole: () => void
   beginVoting: () => void
+  enableAbsoluteVoting: () => void
   showVote: () => void
   castVote: (targetId: string | null) => void
   confirmVote: () => void
@@ -187,6 +188,16 @@ export function createGameStore(
           game: startVoting(state.game),
           pendingVote: undefined,
           isVoteReady: state.game.absoluteVotingEnabled,
+        }
+      : state,
+    ),
+
+    enableAbsoluteVoting: () => set((state) => state.game?.phase === 'VOTING'
+      ? {
+          setup: state.setup ? { ...state.setup, absoluteVotingEnabled: true } : state.setup,
+          game: { ...state.game, absoluteVotingEnabled: true },
+          pendingVote: undefined,
+          isVoteReady: true,
         }
       : state,
     ),

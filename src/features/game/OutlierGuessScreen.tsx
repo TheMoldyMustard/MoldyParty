@@ -43,7 +43,7 @@ export default function OutlierGuessScreen() {
     <main className="screen private-screen outlier-guess-screen">
       <span className="eyebrow">Outlier’s private guess</span>
       <h1>Guess the secret word</h1>
-      <p>Your answer stays hidden until every private action is complete.</p>
+      <p>Say your guess aloud, then enter the same word so the game can check it. Your answer stays hidden until every private action is complete.</p>
       <label className="guess-card">
         <span>Your word guess</span>
         <input

@@ -77,6 +77,26 @@ describe('game store', () => {
     expect(store.getState().isVoteReady).toBe(true)
   })
 
+  it('switches an in-progress private ballot to Absolute Voting without losing votes', () => {
+    const store = createGameStore('absolute-switch-flow', () => 0)
+    store.getState().startGame(setup)
+    store.getState().confirmRole()
+    store.getState().confirmRole()
+    store.getState().confirmRole()
+    store.getState().beginVoting()
+    store.getState().showVote()
+    store.getState().castVote('player-2')
+    store.getState().confirmVote()
+
+    store.getState().enableAbsoluteVoting()
+
+    expect(store.getState().game?.absoluteVotingEnabled).toBe(true)
+    expect(store.getState().game?.votes).toEqual([
+      { voterId: 'player-1', targetId: 'player-2' },
+    ])
+    expect(store.getState().isVoteReady).toBe(true)
+  })
+
   it('replays with Absolute Voting when the result shortcut is used', () => {
     const store = createGameStore('absolute-replay', () => 0)
     store.getState().startGame(setup)
