@@ -35,10 +35,12 @@ export default function RoleRevealScreen() {
     }
     const maskWhenHidden = () => { if (document.visibilityState !== 'visible') hideRole() }
     window.addEventListener('blur', mask)
+    window.addEventListener('pointerup', mask)
     window.addEventListener('pointercancel', mask)
     document.addEventListener('visibilitychange', maskWhenHidden)
     return () => {
       window.removeEventListener('blur', mask)
+      window.removeEventListener('pointerup', mask)
       window.removeEventListener('pointercancel', mask)
       document.removeEventListener('visibilitychange', maskWhenHidden)
     }
@@ -87,10 +89,13 @@ export default function RoleRevealScreen() {
         onPointerUp={(event) => {
           if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
           gestureStart.current = null
+          setCoverOffset(0)
+          hideRole()
         }}
         onPointerCancel={() => { gestureStart.current = null; setCoverOffset(0); hideRole() }}
-        onBlur={() => { if (!game.isRoleVisible) setCoverOffset(0); hideRole() }}
+        onBlur={() => { setCoverOffset(0); hideRole() }}
         onKeyDown={(event) => { if (event.key === ' ' || event.key === 'Enter') reveal() }}
+        onKeyUp={(event) => { if (event.key === ' ' || event.key === 'Enter') { setCoverOffset(0); hideRole() } }}
         >
           <span className="reveal-instruction"><strong>Drag up to reveal</strong><small>Swipe upward to lift the cover</small></span>
         </button>

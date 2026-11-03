@@ -10,6 +10,7 @@ async function holdReveal(page: Page, player: string) {
   await page.mouse.move(box.x + box.width / 2, box.y + box.height * .25)
   await expect(page.getByTestId('private-role')).toBeVisible()
   await page.mouse.up()
+  await expect(page.getByTestId('private-role')).toBeHidden()
   await page.getByRole('button', { name: /seen my role/i }).click()
 }
 
@@ -121,6 +122,7 @@ test('special roles guess privately and every role is revealed', async ({ page }
     if (role === 'Outlier') outlier = player
     if (!['Impostor', 'Jester', 'Outlier'].includes(role)) secretWord = role
     await page.mouse.up()
+    await expect(privateRole).toBeHidden()
     await page.getByRole('button', { name: /seen my role/i }).click()
   }
 

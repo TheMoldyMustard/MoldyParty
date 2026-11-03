@@ -182,6 +182,7 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
 .reveal-curtain:active { cursor: grabbing; transition: none; }
 .reveal-instruction, .role-card { display: flex; height: 100%; flex-direction: column; align-items: center; justify-content: center; gap: .55rem; }
 .reveal-stage .role-card { position: absolute; inset: 0; padding: 1.5rem; }
+.reveal-stage .role-card[aria-hidden="true"] { visibility: hidden; }
 .reveal-instruction strong { font-size: 1.45rem; }
 .reveal-instruction small { color: #a991b1; }
 .role-card strong { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; font-size: clamp(2.5rem, 10vw, 5rem); line-height: .95; letter-spacing: -.05em; }

@@ -24,6 +24,8 @@ async function revealAndConfirm(user: ReturnType<typeof userEvent.setup>, player
   fireEvent.pointerDown(reveal, { pointerId: 1, clientY: 300, clientX: 100 })
   fireEvent.pointerMove(reveal, { pointerId: 1, clientY: 230, clientX: 100 })
   expect(screen.getByTestId('private-role')).toBeInTheDocument()
+  fireEvent.pointerUp(reveal, { pointerId: 1, clientY: 230, clientX: 100 })
+  expect(screen.getByTestId('private-role')).toHaveAttribute('aria-hidden', 'true')
   await user.click(screen.getByRole('button', { name: /seen my role/i }))
 }
 
@@ -117,6 +119,8 @@ describe('Impostor game interface', () => {
     expect(screen.getByTestId('private-role')).toHaveTextContent('Jester')
     expect(screen.getByTestId('private-role')).toHaveTextContent('Get yourself voted out')
     expect(screen.getByTestId('private-role')).not.toHaveTextContent('Moon')
+    fireEvent.pointerUp(jesterReveal, { pointerId: 1, clientY: 230, clientX: 100 })
+    expect(screen.getByTestId('private-role')).toHaveAttribute('aria-hidden', 'true')
     await user.click(screen.getByRole('button', { name: /seen my role/i }))
 
     const outlierReveal = screen.getByRole('button', { name: /drag up to reveal/i })
@@ -126,6 +130,8 @@ describe('Impostor game interface', () => {
     expect(screen.getByTestId('private-role')).toHaveTextContent('Guess the secret word after voting')
     expect(screen.getByTestId('private-role')).toHaveTextContent('Hint: Orbit')
     expect(screen.getByTestId('private-role')).not.toHaveTextContent('Moon')
+    fireEvent.pointerUp(outlierReveal, { pointerId: 1, clientY: 230, clientX: 100 })
+    expect(screen.getByTestId('private-role')).toHaveAttribute('aria-hidden', 'true')
   })
 
   it('masks a revealed role when focus leaves the reveal control', async () => {
@@ -157,6 +163,8 @@ describe('Impostor game interface', () => {
     fireEvent.pointerDown(reveal, { pointerId: 3, clientY: 300, clientX: 100 })
     fireEvent.pointerMove(reveal, { pointerId: 3, clientY: 230, clientX: 100 })
     expect(screen.getByTestId('private-role')).toBeInTheDocument()
+    fireEvent.pointerUp(reveal, { pointerId: 3, clientY: 230, clientX: 100 })
+    expect(screen.getByTestId('private-role')).toHaveAttribute('aria-hidden', 'true')
   })
 
   it('collects the Outlier guess behind a private hand-off before showing results', async () => {
