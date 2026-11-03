@@ -2,8 +2,97 @@ import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { StateStorage } from 'zustand/middleware'
-import { advanceRoleReveal, createRound, recordVote, startVoting } from '../domain/game'
+import { advanceRoleReveal, createRound, recordOutlierGuess, recordVote, startVoting, validateSetup } from '../domain/game'
 import type { GameSetupInput, GameState } from '../domain/types'
+
+const recoverableLegacyPhases: GameState['phase'][] = [
+  'ROLE_REVEAL',
+  'DISCUSSION',
+  'VOTING',
+  'GAME_OVER',
+]
+const recoverableLegacyRoles = ['INNOCENT', 'IMPOSTOR']
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function isValidVoteResult(value: unknown, playerIds: Set<string>): boolean {
+  if (!isRecord(value) || !isRecord(value.counts) || !Array.isArray(value.topCandidateIds)) return false
+  const eliminatedPlayerId = value.eliminatedPlayerId
+  return Object.entries(value.counts).every(([id, count]) => playerIds.has(id) && Number.isInteger(count) && Number(count) >= 0)
+    && value.topCandidateIds.every((id) => typeof id === 'string' && playerIds.has(id))
+    && (eliminatedPlayerId === null || (typeof eliminatedPlayerId === 'string' && playerIds.has(eliminatedPlayerId)))
+    && typeof value.isTie === 'boolean'
+}
+
+function normalizePersistedSetup(value: unknown): GameSetupInput | null {
+  if (!isRecord(value)
+    || !Array.isArray(value.playerNames)
+    || value.playerNames.some((name) => typeof name !== 'string')
+    || typeof value.impostorCount !== 'number'
+    || !isRecord(value.pack)
+    || !Array.isArray(value.pack.items)
+    || typeof value.hintsEnabled !== 'boolean'
+    || !(value.discussionDurationSeconds === null || typeof value.discussionDurationSeconds === 'number')
+  ) return null
+
+  const normalized = {
+    ...value,
+    jesterEnabled: typeof value.jesterEnabled === 'boolean' ? value.jesterEnabled : false,
+    outlierEnabled: typeof value.outlierEnabled === 'boolean' ? value.outlierEnabled : false,
+    outlierHintsEnabled: typeof value.outlierHintsEnabled === 'boolean' ? value.outlierHintsEnabled : false,
+  } as unknown as GameSetupInput
+  return validateSetup(normalized).length === 0 ? normalized : null
+}
+
+function isRecoverableGame(value: unknown): value is GameState {
+  if (!isRecord(value)
+    || typeof value.phase !== 'string'
+    || !recoverableLegacyPhases.includes(value.phase as GameState['phase'])
+    || !Array.isArray(value.players)
+    || value.players.length < 3
+  ) return false
+
+  const playersAreValid = value.players.every((player) => isRecord(player)
+    && typeof player.id === 'string'
+    && typeof player.name === 'string'
+    && typeof player.role === 'string'
+    && recoverableLegacyRoles.includes(player.role)
+    && typeof player.hasViewedRole === 'boolean')
+  if (!playersAreValid) return false
+
+  const playerIds = new Set(value.players.map((player) => (player as Record<string, unknown>).id as string))
+  if (playerIds.size !== value.players.length
+    || !Number.isInteger(value.round) || Number(value.round) < 1
+    || !Number.isInteger(value.impostorCount) || Number(value.impostorCount) < 1 || Number(value.impostorCount) >= value.players.length
+    || typeof value.selectedPackId !== 'string'
+    || typeof value.selectedPackName !== 'string'
+    || typeof value.currentWord !== 'string'
+    || typeof value.currentHint !== 'string'
+    || typeof value.hintsEnabled !== 'boolean'
+    || !(value.discussionDurationSeconds === null || (Number.isInteger(value.discussionDurationSeconds) && Number(value.discussionDurationSeconds) >= 0))
+    || !Number.isInteger(value.currentRevealIndex) || Number(value.currentRevealIndex) < 0 || Number(value.currentRevealIndex) >= value.players.length
+    || typeof value.isRoleVisible !== 'boolean'
+    || !Number.isInteger(value.currentVoterIndex) || Number(value.currentVoterIndex) < 0 || Number(value.currentVoterIndex) >= value.players.length
+    || !Array.isArray(value.votes)
+  ) return false
+
+  const votesAreValid = value.votes.every((vote) => isRecord(vote)
+    && typeof vote.voterId === 'string'
+    && playerIds.has(vote.voterId)
+    && (vote.targetId === null || (typeof vote.targetId === 'string' && playerIds.has(vote.targetId)))
+    && vote.targetId !== vote.voterId)
+  if (!votesAreValid || value.votes.length > value.players.length) return false
+
+  if (value.phase === 'ROLE_REVEAL' || value.phase === 'DISCUSSION') {
+    return value.voteResult === null && value.votes.length === 0
+  }
+  if (value.phase === 'VOTING') {
+    return value.voteResult === null && value.votes.length === value.currentVoterIndex
+  }
+  return value.votes.length === value.players.length && isValidVoteResult(value.voteResult, playerIds)
+}
 
 export type LobbyIntent = 'default' | 'category'
 
@@ -12,6 +101,8 @@ export interface GameStoreState {
   game: GameState | null
   pendingVote: string | null | undefined
   isVoteReady: boolean
+  pendingOutlierGuess: string
+  isOutlierGuessReady: boolean
   discussionRemainingSeconds: number | null
   discussionDeadlineMs: number | null
   isDiscussionTimerRunning: boolean
@@ -24,6 +115,10 @@ export interface GameStoreState {
   showVote: () => void
   castVote: (targetId: string | null) => void
   confirmVote: () => void
+  showOutlierGuess: () => void
+  hideOutlierGuess: () => void
+  setOutlierGuess: (guess: string) => void
+  confirmOutlierGuess: () => void
   pauseDiscussionTimer: () => void
   resumeDiscussionTimer: () => void
   syncDiscussionTimer: () => void
@@ -43,6 +138,8 @@ export function createGameStore(
     game: null,
     pendingVote: undefined,
     isVoteReady: false,
+    pendingOutlierGuess: '',
+    isOutlierGuessReady: false,
     discussionRemainingSeconds: null,
     discussionDeadlineMs: null,
     isDiscussionTimerRunning: false,
@@ -53,6 +150,8 @@ export function createGameStore(
       game: createRound(setup, random),
       pendingVote: undefined,
       isVoteReady: false,
+      pendingOutlierGuess: '',
+      isOutlierGuessReady: false,
       discussionRemainingSeconds: null,
       discussionDeadlineMs: null,
       isDiscussionTimerRunning: false,
@@ -113,6 +212,38 @@ export function createGameStore(
       }
     }),
 
+    showOutlierGuess: () => set((state) => state.game?.phase === 'OUTLIER_GUESS'
+      ? { isOutlierGuessReady: true, pendingOutlierGuess: '' }
+      : state,
+    ),
+
+    hideOutlierGuess: () => set((state) => state.game?.phase === 'OUTLIER_GUESS'
+      ? { isOutlierGuessReady: false, pendingOutlierGuess: '' }
+      : state,
+    ),
+
+    setOutlierGuess: (guess) => set((state) =>
+      state.game?.phase === 'OUTLIER_GUESS' && state.isOutlierGuessReady
+        ? { pendingOutlierGuess: guess }
+        : state,
+    ),
+
+    confirmOutlierGuess: () => set((state) => {
+      if (
+        !state.game
+        || state.game.phase !== 'OUTLIER_GUESS'
+        || !state.isOutlierGuessReady
+        || !state.pendingOutlierGuess.trim()
+      ) {
+        return state
+      }
+      return {
+        game: recordOutlierGuess(state.game, state.pendingOutlierGuess),
+        pendingOutlierGuess: '',
+        isOutlierGuessReady: false,
+      }
+    }),
+
     pauseDiscussionTimer: () => set((state) => {
       if (!state.isDiscussionTimerRunning || state.discussionDeadlineMs === null) return state
       return {
@@ -156,6 +287,8 @@ export function createGameStore(
         }, random),
         pendingVote: undefined,
         isVoteReady: false,
+        pendingOutlierGuess: '',
+        isOutlierGuessReady: false,
         discussionRemainingSeconds: null,
         discussionDeadlineMs: null,
         isDiscussionTimerRunning: false,
@@ -166,6 +299,8 @@ export function createGameStore(
       game: null,
       pendingVote: undefined,
       isVoteReady: false,
+      pendingOutlierGuess: '',
+      isOutlierGuessReady: false,
       discussionRemainingSeconds: null,
       discussionDeadlineMs: null,
       isDiscussionTimerRunning: false,
@@ -176,6 +311,8 @@ export function createGameStore(
       game: null,
       pendingVote: undefined,
       isVoteReady: false,
+      pendingOutlierGuess: '',
+      isOutlierGuessReady: false,
       discussionRemainingSeconds: null,
       discussionDeadlineMs: null,
       isDiscussionTimerRunning: false,
@@ -183,7 +320,7 @@ export function createGameStore(
     }),
   }), {
     name: storageName,
-    version: 1,
+    version: 2,
     storage: createJSONStorage(() => storage),
     partialize: (state) => ({
       setup: state.setup,
@@ -198,10 +335,30 @@ export function createGameStore(
       return {
         ...current,
         ...saved,
+        setup: normalizePersistedSetup(saved.setup),
         game: saved.game ? { ...saved.game, isRoleVisible: false } : null,
         pendingVote: undefined,
         isVoteReady: false,
+        pendingOutlierGuess: '',
+        isOutlierGuessReady: false,
       }
+    },
+    migrate: (persisted, version) => {
+      const saved = persisted as Partial<GameStoreState>
+      if (version >= 2) return saved
+
+      const setup = normalizePersistedSetup(saved.setup)
+      const game = isRecoverableGame(saved.game) ? {
+        ...saved.game,
+        jesterEnabled: saved.game.jesterEnabled ?? false,
+        outlierEnabled: saved.game.outlierEnabled ?? false,
+        outlierHintsEnabled: saved.game.outlierHintsEnabled ?? false,
+        currentOutlierGuessIndex: saved.game.currentOutlierGuessIndex ?? 0,
+        outlierGuesses: saved.game.outlierGuesses ?? [],
+        isRoleVisible: false,
+      } : null
+
+      return { ...saved, setup, game }
     },
   }))
 }

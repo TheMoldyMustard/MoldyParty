@@ -11,6 +11,9 @@ export interface LobbyDraft {
   playerNames: string[]
   impostorCount: number
   hintsEnabled: boolean
+  jesterEnabled: boolean
+  outlierEnabled: boolean
+  outlierHintsEnabled: boolean
   timerEnabled: boolean
   timerMinutes: number
   selectedPackId: string
@@ -28,6 +31,9 @@ function draftFromSetup(setup: GameSetupInput | null): LobbyDraft {
     playerNames: setup?.playerNames ?? ['', '', ''],
     impostorCount: setup?.impostorCount ?? 1,
     hintsEnabled: setup?.hintsEnabled ?? true,
+    jesterEnabled: setup?.jesterEnabled ?? false,
+    outlierEnabled: setup?.outlierEnabled ?? false,
+    outlierHintsEnabled: setup?.outlierHintsEnabled ?? false,
     timerEnabled: setup?.discussionDurationSeconds !== null,
     timerMinutes: Math.max(1, Math.round((setup?.discussionDurationSeconds ?? 180) / 60)),
     selectedPackId: setup?.pack.id ?? builtInPacks[0].id,
@@ -68,6 +74,9 @@ export default function LobbyScreen({ draft: savedDraft, onDraftChange, onBack, 
       impostorCount: draft.impostorCount,
       pack,
       hintsEnabled: draft.hintsEnabled,
+      jesterEnabled: draft.jesterEnabled,
+      outlierEnabled: draft.outlierEnabled,
+      outlierHintsEnabled: draft.outlierEnabled && draft.outlierHintsEnabled,
       discussionDurationSeconds: draft.timerEnabled ? draft.timerMinutes * 60 : null,
     }
     const nextErrors = validateSetup(setup)
@@ -89,6 +98,9 @@ export default function LobbyScreen({ draft: savedDraft, onDraftChange, onBack, 
               {Array.from({ length: Math.max(1, draft.playerNames.length - 1) }, (_, index) => <option key={index + 1}>{index + 1}</option>)}
             </select></label>
             <label className="switch-row"><span><strong>Impostor hints</strong><small>Show a broad clue</small></span><input type="checkbox" checked={draft.hintsEnabled} onChange={(event) => updateDraft({ ...draft, hintsEnabled: event.target.checked })} /></label>
+            <label className="switch-row"><span><strong>Jester</strong><small>Wins by getting voted out</small></span><input aria-label="Jester" type="checkbox" checked={draft.jesterEnabled} onChange={(event) => updateDraft({ ...draft, jesterEnabled: event.target.checked })} /></label>
+            <label className="switch-row"><span><strong>Outlier</strong><small>Wins by guessing the word</small></span><input aria-label="Outlier" type="checkbox" checked={draft.outlierEnabled} onChange={(event) => updateDraft({ ...draft, outlierEnabled: event.target.checked, outlierHintsEnabled: event.target.checked ? draft.outlierHintsEnabled : false })} /></label>
+            {draft.outlierEnabled && <label className="switch-row"><span><strong>Give Outlier a hint</strong><small>Show the selected broad clue</small></span><input aria-label="Give Outlier a hint" type="checkbox" checked={draft.outlierHintsEnabled} onChange={(event) => updateDraft({ ...draft, outlierHintsEnabled: event.target.checked })} /></label>}
             <label className="switch-row"><span><strong>Discussion timer</strong><small>Manual voting is always available</small></span><input type="checkbox" checked={draft.timerEnabled} onChange={(event) => updateDraft({ ...draft, timerEnabled: event.target.checked })} /></label>
             {draft.timerEnabled && <label>Timer minutes<input type="number" min="1" max="60" value={draft.timerMinutes} onChange={(event) => updateDraft({ ...draft, timerMinutes: Math.max(1, Number(event.target.value)) })} /></label>}
           </div>

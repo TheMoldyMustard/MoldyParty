@@ -34,11 +34,12 @@ Install Playwright's browser once on a new machine with `npx playwright install 
 ## How the game works
 
 1. Add at least three uniquely named players.
-2. Choose fewer impostors than players, a built-in or custom category, optional hints, and an optional discussion timer.
-3. Pass the device. Each player deliberately holds the reveal surface to see their role; releasing it masks the secret immediately.
+2. Choose fewer impostors than players, a built-in or custom category, optional hints, and an optional discussion timer. You can also enable one Jester and one Outlier, while leaving at least one Innocent in the round.
+3. Pass the device. Each player deliberately holds the reveal surface to see their role; releasing it masks the secret immediately. The Jester tries to get voted out. The Outlier tries to guess the word and receives no hint unless the dedicated Outlier hint setting is enabled.
 4. Discuss until the group chooses to proceed. The timer never advances the game automatically.
 5. Pass the device again for private voting. Players may select anyone except themselves or skip.
-6. A unique vote leader is revealed. A tie or all-skipped ballot eliminates nobody. All impostors and the word are then shown.
+6. If an Outlier is enabled, pass the device privately to them for one guess after voting. Matching ignores surrounding whitespace and letter case; being voted out does not affect the Outlier's result.
+7. A unique vote leader is revealed. A tie or all-skipped ballot eliminates nobody. The secret word, special-role outcomes, and every player's role are then shown.
 
 ## Custom packs
 
@@ -65,11 +66,11 @@ Each new-format item contains five hints; one is selected randomly when the roun
 
 - React, TypeScript, Vite, and Tailwind CSS provide the responsive interface.
 - Pure functions in `src/domain` own validation, role assignment, phase transitions, ballots, ties, and results.
-- Zustand coordinates the finite-state lifecycle (`LOBBY → ROLE_REVEAL → DISCUSSION → VOTING → GAME_OVER`) and persists in-progress recovery.
+- Zustand coordinates the finite-state lifecycle (`LOBBY → ROLE_REVEAL → DISCUSSION → VOTING → OUTLIER_GUESS? → GAME_OVER`) and persists in-progress recovery.
 - Dexie stores custom packs in IndexedDB.
 - `vite-plugin-pwa`/Workbox precaches the application shell and supplies an offline navigation fallback.
 - Vitest and Testing Library verify rules and interaction behavior; Playwright verifies complete desktop/mobile and offline journeys.
 
 ## Offline and privacy notes
 
-MoldyParty does not transmit gameplay or custom-pack data. Clearing browser storage, using private browsing, or uninstalling with site-data removal can erase local packs and an in-progress round, so export important packs as JSON. The first visit must be online; subsequent production-build visits can load from the service worker cache.
+MoldyParty does not transmit gameplay or custom-pack data. Role reveals, ballots, and unfinished Outlier guesses are remasked after privacy is lost or a saved round is restored. Clearing browser storage, using private browsing, or uninstalling with site-data removal can erase local packs and an in-progress round, so export important packs as JSON. The first visit must be online; subsequent production-build visits can load from the service worker cache.

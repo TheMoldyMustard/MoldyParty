@@ -2,6 +2,7 @@ import type {
   GameSetupInput,
   GameState,
   Player,
+  SpecialRoleOutcome,
   SetupErrors,
   VoteRecord,
   VoteResult,
@@ -25,6 +26,19 @@ export function validateSetup(input: GameSetupInput): SetupErrors {
   }
   if (input.impostorCount < 1 || input.impostorCount >= input.playerNames.length) {
     errors.push('Choose at least 1 impostor and fewer impostors than players.')
+  }
+  if (
+    typeof input.jesterEnabled !== 'boolean'
+    || typeof input.outlierEnabled !== 'boolean'
+    || typeof input.outlierHintsEnabled !== 'boolean'
+  ) {
+    errors.push('Role settings must be on or off.')
+  }
+  const reservedRoles = input.impostorCount
+    + (input.jesterEnabled === true ? 1 : 0)
+    + (input.outlierEnabled === true ? 1 : 0)
+  if (reservedRoles >= input.playerNames.length) {
+    errors.push('Leave at least one player as an Innocent.')
   }
   if (input.pack.items.length === 0) {
     errors.push('Choose a word pack with at least one item.')
@@ -61,9 +75,12 @@ export function createRound(input: GameSetupInput, random: () => number = Math.r
   const selectedItem = input.pack.items[wordIndex]
   const hintPool = selectedItem.hints?.length ? selectedItem.hints : [selectedItem.hint]
   const hintIndex = Math.min(hintPool.length - 1, Math.floor(random() * hintPool.length))
-  const impostorIndexes = new Set(
-    shuffledIndexes(input.playerNames.length, random).slice(0, input.impostorCount),
-  )
+  const roleIndexes = shuffledIndexes(input.playerNames.length, random)
+  const impostorIndexes = new Set(roleIndexes.slice(0, input.impostorCount))
+  const jesterIndex = input.jesterEnabled ? roleIndexes[input.impostorCount] : null
+  const outlierIndex = input.outlierEnabled
+    ? roleIndexes[input.impostorCount + (input.jesterEnabled ? 1 : 0)]
+    : null
 
   return {
     phase: 'ROLE_REVEAL',
@@ -71,7 +88,13 @@ export function createRound(input: GameSetupInput, random: () => number = Math.r
     players: input.playerNames.map((name, index) => ({
       id: `player-${index + 1}`,
       name: name.trim(),
-      role: impostorIndexes.has(index) ? 'IMPOSTOR' : 'INNOCENT',
+      role: impostorIndexes.has(index)
+        ? 'IMPOSTOR'
+        : index === jesterIndex
+          ? 'JESTER'
+          : index === outlierIndex
+            ? 'OUTLIER'
+            : 'INNOCENT',
       hasViewedRole: false,
     })),
     impostorCount: input.impostorCount,
@@ -80,12 +103,17 @@ export function createRound(input: GameSetupInput, random: () => number = Math.r
     currentWord: selectedItem.word,
     currentHint: hintPool[hintIndex],
     hintsEnabled: input.hintsEnabled,
+    jesterEnabled: input.jesterEnabled,
+    outlierEnabled: input.outlierEnabled,
+    outlierHintsEnabled: input.outlierEnabled && input.outlierHintsEnabled,
     discussionDurationSeconds: input.discussionDurationSeconds,
     currentRevealIndex: 0,
     isRoleVisible: false,
     currentVoterIndex: 0,
     votes: [],
     voteResult: null,
+    currentOutlierGuessIndex: 0,
+    outlierGuesses: [],
   }
 }
 
@@ -159,11 +187,70 @@ export function recordVote(state: GameState, targetId: string | null): GameState
   const votes = [...state.votes, { voterId: voter.id, targetId }]
   const isLastVoter = state.currentVoterIndex === state.players.length - 1
 
+  const hasOutlier = state.players.some((player) => player.role === 'OUTLIER')
+
   return {
     ...state,
-    phase: isLastVoter ? 'GAME_OVER' : 'VOTING',
+    phase: isLastVoter ? (hasOutlier ? 'OUTLIER_GUESS' : 'GAME_OVER') : 'VOTING',
     currentVoterIndex: isLastVoter ? state.currentVoterIndex : state.currentVoterIndex + 1,
     votes,
     voteResult: isLastVoter ? calculateVoteResult(state.players, votes) : null,
   }
+}
+
+export function recordOutlierGuess(state: GameState, guess: string): GameState {
+  if (state.phase !== 'OUTLIER_GUESS') {
+    return state
+  }
+
+  const trimmedGuess = guess.trim()
+  if (!trimmedGuess) {
+    throw new Error('Enter a guess for the secret word.')
+  }
+
+  const outliers = state.players.filter((player) => player.role === 'OUTLIER')
+  const outlier = outliers[state.currentOutlierGuessIndex]
+  if (!outlier) {
+    throw new Error('No Outlier is waiting to guess.')
+  }
+
+  const outlierGuesses = [...state.outlierGuesses, {
+    playerId: outlier.id,
+    guess: trimmedGuess,
+    isCorrect: trimmedGuess.toLowerCase() === state.currentWord.trim().toLowerCase(),
+  }]
+  const isLastOutlier = state.currentOutlierGuessIndex === outliers.length - 1
+
+  return {
+    ...state,
+    phase: isLastOutlier ? 'GAME_OVER' : 'OUTLIER_GUESS',
+    currentOutlierGuessIndex: isLastOutlier
+      ? state.currentOutlierGuessIndex
+      : state.currentOutlierGuessIndex + 1,
+    outlierGuesses,
+  }
+}
+
+export function calculateSpecialRoleOutcomes(state: GameState): SpecialRoleOutcome[] {
+  return state.players.flatMap((player): SpecialRoleOutcome[] => {
+    if (player.role === 'JESTER') {
+      const won = state.voteResult?.eliminatedPlayerId === player.id
+      return [{
+        playerId: player.id,
+        role: 'JESTER',
+        won,
+        reason: won ? 'Voted out' : 'Not voted out',
+      }]
+    }
+    if (player.role === 'OUTLIER') {
+      const won = state.outlierGuesses.find((guess) => guess.playerId === player.id)?.isCorrect === true
+      return [{
+        playerId: player.id,
+        role: 'OUTLIER',
+        won,
+        reason: won ? 'Guessed the word' : 'Incorrect guess',
+      }]
+    }
+    return []
+  })
 }

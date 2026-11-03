@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { builtInPacks } from './builtInPacks'
 import {
   advanceRoleReveal,
+  calculateSpecialRoleOutcomes,
   calculateVoteResult,
   createRound,
+  recordOutlierGuess,
   recordVote,
   startVoting,
   validateSetup,
@@ -24,6 +26,9 @@ const validSetup = {
     ],
   },
   hintsEnabled: true,
+  jesterEnabled: false,
+  outlierEnabled: false,
+  outlierHintsEnabled: false,
   discussionDurationSeconds: 180,
 }
 
@@ -48,6 +53,25 @@ describe('validateSetup', () => {
     expect(validateSetup({ ...validSetup, impostorCount })).toContain(
       'Choose at least 1 impostor and fewer impostors than players.',
     )
+  })
+
+  it('requires at least one word-knowing innocent after special roles are reserved', () => {
+    expect(validateSetup({
+      ...validSetup,
+      impostorCount: 2,
+      jesterEnabled: true,
+      outlierEnabled: true,
+    })).toContain('Leave at least one player as an Innocent.')
+  })
+
+  it.each([
+    ['jesterEnabled', 'false'],
+    ['outlierEnabled', 1],
+    ['outlierHintsEnabled', null],
+  ] as const)('rejects a non-boolean %s role setting', (field, value) => {
+    const setup = { ...validSetup, [field]: value } as unknown as typeof validSetup
+
+    expect(validateSetup(setup)).toContain('Role settings must be on or off.')
   })
 })
 
@@ -86,6 +110,32 @@ describe('createRound', () => {
     }, () => randomValues.shift() ?? 0)
 
     expect(state.currentHint).toBe('Silver')
+  })
+
+  it('assigns enabled special roles to distinct players and keeps an innocent', () => {
+    const state = createRound({
+      ...validSetup,
+      playerNames: ['Alex', 'Blair', 'Casey', 'Devon', 'Emery'],
+      jesterEnabled: true,
+      outlierEnabled: true,
+      outlierHintsEnabled: true,
+    }, () => 0)
+
+    expect(state.players.map((player) => player.role).sort()).toEqual([
+      'IMPOSTOR',
+      'INNOCENT',
+      'INNOCENT',
+      'JESTER',
+      'OUTLIER',
+    ])
+    expect(state.outlierHintsEnabled).toBe(true)
+    expect(state.outlierGuesses).toEqual([])
+  })
+
+  it('disables the Outlier hint flag when the Outlier role is off', () => {
+    const state = createRound({ ...validSetup, outlierHintsEnabled: true }, () => 0)
+
+    expect(state.outlierHintsEnabled).toBe(false)
   })
 
   it('refuses invalid setup rather than producing a partial round', () => {
@@ -257,5 +307,97 @@ describe('voting lifecycle', () => {
 
     expect(state.phase).toBe('GAME_OVER')
     expect(state.voteResult).toMatchObject({ eliminatedPlayerId: 'b', isTie: false })
+  })
+
+  it('moves to a private Outlier guess after the final vote', () => {
+    const players: Player[] = [
+      { id: 'a', name: 'Alex', role: 'INNOCENT', hasViewedRole: true },
+      { id: 'b', name: 'Blair', role: 'IMPOSTOR', hasViewedRole: true },
+      { id: 'c', name: 'Casey', role: 'OUTLIER', hasViewedRole: true },
+      { id: 'd', name: 'Devon', role: 'INNOCENT', hasViewedRole: true },
+    ]
+    let state = startVoting({
+      ...createRound({ ...validSetup, outlierEnabled: true }, () => 0),
+      phase: 'DISCUSSION',
+      players,
+    })
+    state = recordVote(state, 'b')
+    state = recordVote(state, 'a')
+    state = recordVote(state, 'b')
+    state = recordVote(state, 'b')
+
+    expect(state.phase).toBe('OUTLIER_GUESS')
+    expect(state.voteResult?.eliminatedPlayerId).toBe('b')
+  })
+})
+
+describe('special role outcomes', () => {
+  function specialRoleState() {
+    return {
+      ...createRound({
+        ...validSetup,
+        playerNames: ['Alex', 'Blair', 'Casey', 'Devon', 'Emery'],
+        jesterEnabled: true,
+        outlierEnabled: true,
+      }, () => 0),
+      phase: 'OUTLIER_GUESS' as const,
+      players: [
+        { id: 'a', name: 'Alex', role: 'INNOCENT' as const, hasViewedRole: true },
+        { id: 'b', name: 'Blair', role: 'IMPOSTOR' as const, hasViewedRole: true },
+        { id: 'c', name: 'Casey', role: 'JESTER' as const, hasViewedRole: true },
+        { id: 'd', name: 'Devon', role: 'OUTLIER' as const, hasViewedRole: true },
+        { id: 'e', name: 'Emery', role: 'INNOCENT' as const, hasViewedRole: true },
+      ],
+      voteResult: {
+        counts: { a: 0, b: 0, c: 4, d: 0, e: 1 },
+        topCandidateIds: ['c'],
+        eliminatedPlayerId: 'c',
+        isTie: false,
+      },
+    }
+  }
+
+  it('accepts a trimmed case-insensitive word guess and completes the round', () => {
+    const state = recordOutlierGuess(specialRoleState(), '  OTTER  ')
+
+    expect(state.phase).toBe('GAME_OVER')
+    expect(state.outlierGuesses).toEqual([
+      { playerId: 'd', guess: 'OTTER', isCorrect: true },
+    ])
+  })
+
+  it('rejects a blank Outlier guess', () => {
+    expect(() => recordOutlierGuess(specialRoleState(), '   ')).toThrow(
+      'Enter a guess for the secret word.',
+    )
+  })
+
+  it('resolves Jester and Outlier wins from independent conditions', () => {
+    const completed = recordOutlierGuess(specialRoleState(), 'otter')
+
+    expect(calculateSpecialRoleOutcomes(completed)).toEqual([
+      { playerId: 'c', role: 'JESTER', won: true, reason: 'Voted out' },
+      { playerId: 'd', role: 'OUTLIER', won: true, reason: 'Guessed the word' },
+    ])
+  })
+
+  it('does not let elimination make an incorrect Outlier guess win', () => {
+    const state = specialRoleState()
+    const completed = recordOutlierGuess({
+      ...state,
+      voteResult: {
+        ...state.voteResult,
+        counts: { a: 0, b: 0, c: 0, d: 4, e: 1 },
+        topCandidateIds: ['d'],
+        eliminatedPlayerId: 'd',
+      },
+    }, 'falcon')
+
+    expect(calculateSpecialRoleOutcomes(completed).find((outcome) => outcome.role === 'OUTLIER')).toEqual({
+      playerId: 'd',
+      role: 'OUTLIER',
+      won: false,
+      reason: 'Incorrect guess',
+    })
   })
 })

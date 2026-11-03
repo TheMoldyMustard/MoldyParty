@@ -4,6 +4,7 @@ import UpdatePrompt from './components/UpdatePrompt'
 import DiscussionScreen from './features/game/DiscussionScreen'
 import GameOverScreen from './features/game/GameOverScreen'
 import LobbyScreen, { type LobbyDraft } from './features/game/LobbyScreen'
+import OutlierGuessScreen from './features/game/OutlierGuessScreen'
 import RoleRevealScreen from './features/game/RoleRevealScreen'
 import VotingScreen from './features/game/VotingScreen'
 import PackManager from './features/packs/PackManager'
@@ -21,6 +22,7 @@ function AppContent() {
   if (game?.phase === 'ROLE_REVEAL') return <RoleRevealScreen key={game.currentRevealIndex} />
   if (game?.phase === 'DISCUSSION') return <DiscussionScreen />
   if (game?.phase === 'VOTING') return <VotingScreen />
+  if (game?.phase === 'OUTLIER_GUESS') return <OutlierGuessScreen />
   if (game?.phase === 'GAME_OVER') return <GameOverScreen
     onChangeCategory={() => { changeCategory(); setView('lobby') }}
     onReturnToLobby={() => { returnToLobby(); setView('home') }}

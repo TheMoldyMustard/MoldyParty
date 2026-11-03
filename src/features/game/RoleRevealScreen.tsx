@@ -9,6 +9,19 @@ export default function RoleRevealScreen() {
   const [hasRevealed, setHasRevealed] = useState(false)
   const player = game.players[game.currentRevealIndex]
 
+  const roleContent = (() => {
+    switch (player.role) {
+      case 'IMPOSTOR':
+        return <><small>You are the</small><strong>Impostor</strong><em>{game.hintsEnabled ? `Hint: ${game.currentHint}` : 'No hint'}</em></>
+      case 'JESTER':
+        return <><small>You are the</small><strong>Jester</strong><em>Get yourself voted out</em></>
+      case 'OUTLIER':
+        return <><small>You are the</small><strong>Outlier</strong><em>Guess the secret word after voting</em><em>{game.outlierHintsEnabled ? `Hint: ${game.currentHint}` : 'No hint'}</em></>
+      case 'INNOCENT':
+        return <><small>Your word is</small><strong>{game.currentWord}</strong><em>Blend in. Find the impostor.</em></>
+    }
+  })()
+
   useEffect(() => {
     const mask = () => hideRole()
     const maskWhenHidden = () => { if (document.visibilityState !== 'visible') hideRole() }
@@ -53,7 +66,7 @@ export default function RoleRevealScreen() {
       >
         {game.isRoleVisible ? (
           <span className={`role-card role-card--${player.role.toLowerCase()}`} data-testid="private-role">
-            {player.role === 'IMPOSTOR' ? <><small>You are the</small><strong>Impostor</strong><em>{game.hintsEnabled ? `Hint: ${game.currentHint}` : 'No hint'}</em></> : <><small>Your word is</small><strong>{game.currentWord}</strong><em>Blend in. Find the impostor.</em></>}
+            {roleContent}
           </span>
         ) : <span className="reveal-instruction"><strong>Hold to reveal</strong><small>Release to hide instantly</small></span>}
       </button>

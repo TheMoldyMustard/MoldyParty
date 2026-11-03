@@ -181,6 +181,8 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
 .role-card small { color: var(--lime); font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
 .role-card em { margin-top: .5rem; color: #dbcde0; font-style: normal; }
 .role-card--impostor small, .role-card--impostor strong { color: #ff8377; }
+.role-card--jester small, .role-card--jester strong { color: #ffd166; }
+.role-card--outlier small, .role-card--outlier strong { color: #8fd8ff; }
 
 .discussion-screen, .voting-screen, .result-screen { gap: 1.4rem; }
 .timer-card { width: min(100%, 30rem); display: grid; justify-items: center; gap: 1rem; margin-block: 1.5rem; padding: 2rem; border: 1px solid rgb(199 243 107 / 30%); border-radius: 2rem; background: rgb(199 243 107 / 8%); }
@@ -193,12 +195,32 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
 .ballot-grid button.selected { border-color: var(--lime); color: var(--ink); background: var(--lime); }
 .ballot-grid button.skip { grid-column: 1 / -1; color: #bda8c4; background: transparent; }
 .ballot-grid button.skip.selected { color: var(--ink); background: var(--lime); }
+.outlier-guess-screen { gap: 1.25rem; }
+.outlier-guess-screen > p { color: #c8b5ce; }
+.guess-card { width: min(100%, 32rem); display: grid; gap: .65rem; text-align: left; color: #d8cadc; font-size: .82rem; font-weight: 850; }
+.guess-card input { width: 100%; min-height: 4rem; border: 1px solid rgb(255 255 255 / 18%); border-radius: 1rem; padding: .8rem 1rem; color: white; background: #24112f; font-size: 1.1rem; }
 .verdict { padding: .6rem 1rem; border-radius: 999px; color: #ffd9d4; background: rgb(255 111 97 / 14%); font-weight: 850; }
 .verdict--impostor { color: #dfffa1; background: rgb(199 243 107 / 13%); }
+.verdict--jester { color: #ffe49a; background: rgb(255 209 102 / 14%); }
+.result-screen { justify-content: flex-start; overflow-y: auto; padding-top: max(3rem, env(safe-area-inset-top)); }
 .reveal-summary { width: min(100%, 38rem); display: grid; grid-template-columns: repeat(2, 1fr); gap: .8rem; margin-block: 1.5rem; }
 .reveal-summary > div { display: grid; gap: .5rem; padding: 1.5rem; border: 1px solid rgb(255 255 255 / 13%); border-radius: 1.3rem; background: rgb(255 255 255 / 6%); }
 .reveal-summary small { color: #a991b1; font-weight: 800; text-transform: uppercase; }
 .reveal-summary strong { font-size: 1.6rem; }
+.special-outcomes { width: min(100%, 38rem); display: grid; gap: .7rem; }
+.special-outcome { display: grid; gap: .3rem; padding: 1rem 1.2rem; border: 1px solid rgb(255 255 255 / 13%); border-radius: 1rem; background: rgb(255 255 255 / 6%); }
+.special-outcome--win { border-color: rgb(199 243 107 / 36%); background: rgb(199 243 107 / 9%); }
+.special-outcome--loss { border-color: rgb(255 111 97 / 30%); }
+.special-outcome span, .special-outcome small { color: #bca8c3; }
+.role-reveal { width: min(100%, 46rem); display: grid; gap: .9rem; margin-block: 1rem; }
+.role-reveal h2 { font-size: 1.4rem; }
+.role-roster { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .7rem; margin: 0; padding: 0; list-style: none; text-align: left; }
+.role-roster__item { display: grid; grid-template-columns: 1fr auto; gap: .25rem .75rem; padding: 1rem; border: 1px solid rgb(255 255 255 / 13%); border-radius: 1rem; background: rgb(255 255 255 / 6%); }
+.role-roster__item span { color: #d7c5dd; font-weight: 850; }
+.role-roster__item small { grid-column: 1 / -1; color: #ff9b92; font-weight: 850; }
+.role-roster__item--impostor span { color: #ff8377; }
+.role-roster__item--jester span { color: #ffd166; }
+.role-roster__item--outlier span { color: #8fd8ff; }
 .result-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .7rem; }
 
 .pack-manager { margin-top: 2rem; }
@@ -238,6 +260,7 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
 @media (max-width: 700px) {
   .category-grid { grid-template-columns: repeat(2, 1fr); }
   .rule-grid, .reveal-summary { grid-template-columns: 1fr; }
+  .role-roster { grid-template-columns: 1fr; }
   .word-row { grid-template-columns: 1fr; }
   .ai-helper { grid-template-columns: 1fr; align-items: stretch; }
   .copy-status { position: static; }

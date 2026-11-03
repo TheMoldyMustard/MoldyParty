@@ -3,6 +3,8 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../../App'
+import { createRound } from '../../domain/game'
+import type { GameSetupInput } from '../../domain/types'
 import { gameStore } from '../../store/gameStore'
 
 async function openConfiguredLobby() {
@@ -34,6 +36,8 @@ describe('Impostor game interface', () => {
       game: null,
       pendingVote: undefined,
       isVoteReady: false,
+      pendingOutlierGuess: '',
+      isOutlierGuessReady: false,
       lobbyIntent: 'default',
     })
   })
@@ -62,6 +66,66 @@ describe('Impostor game interface', () => {
     expect(screen.getByLabelText('Player 3 name')).toHaveValue('Casey')
   })
 
+  it('offers optional Jester and Outlier roles with Outlier hints off by default', async () => {
+    const user = await openConfiguredLobby()
+
+    expect(screen.getByLabelText('Jester')).not.toBeChecked()
+    expect(screen.getByLabelText('Outlier')).not.toBeChecked()
+    expect(screen.queryByLabelText('Give Outlier a hint')).not.toBeInTheDocument()
+
+    await user.click(screen.getByLabelText('Outlier'))
+    expect(screen.getByLabelText('Give Outlier a hint')).not.toBeChecked()
+  })
+
+  it('blocks a setup that leaves no word-knowing Innocent', async () => {
+    const user = await openConfiguredLobby()
+    await user.click(screen.getByLabelText('Jester'))
+    await user.click(screen.getByLabelText('Outlier'))
+    await user.click(screen.getByRole('button', { name: 'Start secret round' }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Leave at least one player as an Innocent.')
+  })
+
+  it('reveals special-role goals without exposing the secret word', async () => {
+    const setup: GameSetupInput = {
+      playerNames: ['Alex', 'Blair', 'Casey', 'Devon', 'Emery'],
+      impostorCount: 1,
+      pack: {
+        id: 'special-test',
+        packName: 'Special Test',
+        category: 'Test',
+        source: 'builtIn',
+        items: [{ word: 'Moon', hint: 'Orbit' }],
+      },
+      hintsEnabled: true,
+      jesterEnabled: true,
+      outlierEnabled: true,
+      outlierHintsEnabled: true,
+      discussionDurationSeconds: null,
+    }
+    gameStore.setState({ game: createRound(setup, () => 0), setup })
+    const user = userEvent.setup()
+    render(<App />)
+
+    await revealAndConfirm(user, 'Alex')
+    await revealAndConfirm(user, 'Blair')
+
+    const jesterReveal = screen.getByRole('button', { name: /hold to reveal/i })
+    fireEvent.pointerDown(jesterReveal)
+    expect(screen.getByTestId('private-role')).toHaveTextContent('Jester')
+    expect(screen.getByTestId('private-role')).toHaveTextContent('Get yourself voted out')
+    expect(screen.getByTestId('private-role')).not.toHaveTextContent('Moon')
+    fireEvent.pointerUp(jesterReveal)
+    await user.click(screen.getByRole('button', { name: /seen my role/i }))
+
+    const outlierReveal = screen.getByRole('button', { name: /hold to reveal/i })
+    fireEvent.pointerDown(outlierReveal)
+    expect(screen.getByTestId('private-role')).toHaveTextContent('Outlier')
+    expect(screen.getByTestId('private-role')).toHaveTextContent('Guess the secret word after voting')
+    expect(screen.getByTestId('private-role')).toHaveTextContent('Hint: Orbit')
+    expect(screen.getByTestId('private-role')).not.toHaveTextContent('Moon')
+  })
+
   it('masks a revealed role when focus leaves the reveal control', async () => {
     const user = await openConfiguredLobby()
     await user.click(screen.getByRole('button', { name: 'Start secret round' }))
@@ -71,6 +135,53 @@ describe('Impostor game interface', () => {
     expect(screen.getByTestId('private-role')).toBeInTheDocument()
     fireEvent.blur(reveal)
     expect(screen.queryByTestId('private-role')).not.toBeInTheDocument()
+  })
+
+  it('collects the Outlier guess behind a private hand-off before showing results', async () => {
+    const setup: GameSetupInput = {
+      playerNames: ['Alex', 'Blair', 'Casey', 'Devon'],
+      impostorCount: 1,
+      pack: {
+        id: 'outlier-test',
+        packName: 'Outlier Test',
+        category: 'Test',
+        source: 'builtIn',
+        items: [{ word: 'Moon', hint: 'Orbit' }],
+      },
+      hintsEnabled: true,
+      jesterEnabled: false,
+      outlierEnabled: true,
+      outlierHintsEnabled: false,
+      discussionDurationSeconds: null,
+    }
+    const game = createRound(setup, () => 0)
+    gameStore.setState({
+      setup,
+      game: {
+        ...game,
+        phase: 'OUTLIER_GUESS',
+        voteResult: {
+          counts: { 'player-1': 0, 'player-2': 3, 'player-3': 0, 'player-4': 1 },
+          topCandidateIds: ['player-2'],
+          eliminatedPlayerId: 'player-2',
+          isTie: false,
+        },
+      },
+    })
+    const user = userEvent.setup()
+    render(<App />)
+
+    expect(screen.getByRole('heading', { name: 'Pass to Casey' })).toBeInTheDocument()
+    expect(screen.queryByText('Moon')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'I’m Casey' }))
+
+    const guessInput = screen.getByLabelText('Your word guess')
+    expect(screen.getByRole('button', { name: 'Lock in guess' })).toBeDisabled()
+    expect(screen.queryByText('Moon')).not.toBeInTheDocument()
+    await user.type(guessInput, 'Moon')
+    await user.click(screen.getByRole('button', { name: 'Lock in guess' }))
+
+    expect(screen.getByRole('heading', { name: 'Blair was voted out' })).toBeInTheDocument()
   })
 
   it('plays a full private round through voting and result reveal', async () => {
@@ -103,6 +214,53 @@ describe('Impostor game interface', () => {
     expect(screen.getByRole('button', { name: 'Play again' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Change category' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Return to lobby' })).toBeInTheDocument()
+  })
+
+  it('reveals every player role and each special-role outcome at round end', () => {
+    const setup: GameSetupInput = {
+      playerNames: ['Alex', 'Blair', 'Casey', 'Devon', 'Emery'],
+      impostorCount: 1,
+      pack: {
+        id: 'result-test',
+        packName: 'Result Test',
+        category: 'Test',
+        source: 'builtIn',
+        items: [{ word: 'Moon', hint: 'Orbit' }],
+      },
+      hintsEnabled: true,
+      jesterEnabled: true,
+      outlierEnabled: true,
+      outlierHintsEnabled: false,
+      discussionDurationSeconds: null,
+    }
+    const game = createRound(setup, () => 0)
+    gameStore.setState({
+      setup,
+      game: {
+        ...game,
+        phase: 'GAME_OVER',
+        voteResult: {
+          counts: { 'player-1': 0, 'player-2': 0, 'player-3': 4, 'player-4': 0, 'player-5': 1 },
+          topCandidateIds: ['player-3'],
+          eliminatedPlayerId: 'player-3',
+          isTie: false,
+        },
+        outlierGuesses: [{ playerId: 'player-4', guess: 'Moon', isCorrect: true }],
+      },
+    })
+
+    render(<App />)
+
+    expect(screen.getByRole('heading', { name: 'Casey was voted out' })).toBeInTheDocument()
+    expect(screen.getByText('Casey won as Jester')).toBeInTheDocument()
+    expect(screen.getByText('Devon won as Outlier')).toBeInTheDocument()
+    expect(screen.getByText('Guess: Moon')).toBeInTheDocument()
+    const roster = screen.getByRole('list', { name: 'Player roles' })
+    expect(roster).toHaveTextContent('AlexInnocent')
+    expect(roster).toHaveTextContent('BlairImpostor')
+    expect(roster).toHaveTextContent('CaseyJesterVoted out')
+    expect(roster).toHaveTextContent('DevonOutlier')
+    expect(roster).toHaveTextContent('EmeryInnocent')
   })
 
   it('replays with the same settings from the result screen', async () => {

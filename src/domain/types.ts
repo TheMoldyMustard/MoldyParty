@@ -1,5 +1,5 @@
-export type GamePhase = 'LOBBY' | 'ROLE_REVEAL' | 'DISCUSSION' | 'VOTING' | 'GAME_OVER'
-export type PlayerRole = 'INNOCENT' | 'IMPOSTOR'
+export type GamePhase = 'LOBBY' | 'ROLE_REVEAL' | 'DISCUSSION' | 'VOTING' | 'OUTLIER_GUESS' | 'GAME_OVER'
+export type PlayerRole = 'INNOCENT' | 'IMPOSTOR' | 'JESTER' | 'OUTLIER'
 
 export interface Player {
   id: string
@@ -36,6 +36,19 @@ export interface VoteResult {
   isTie: boolean
 }
 
+export interface OutlierGuessRecord {
+  playerId: string
+  guess: string
+  isCorrect: boolean
+}
+
+export interface SpecialRoleOutcome {
+  playerId: string
+  role: 'JESTER' | 'OUTLIER'
+  won: boolean
+  reason: string
+}
+
 export interface GameState {
   phase: GamePhase
   round: number
@@ -46,12 +59,17 @@ export interface GameState {
   currentWord: string
   currentHint: string
   hintsEnabled: boolean
+  jesterEnabled: boolean
+  outlierEnabled: boolean
+  outlierHintsEnabled: boolean
   discussionDurationSeconds: number | null
   currentRevealIndex: number
   isRoleVisible: boolean
   currentVoterIndex: number
   votes: VoteRecord[]
   voteResult: VoteResult | null
+  currentOutlierGuessIndex: number
+  outlierGuesses: OutlierGuessRecord[]
 }
 
 export interface GameSetupInput {
@@ -59,6 +77,9 @@ export interface GameSetupInput {
   impostorCount: number
   pack: WordPack
   hintsEnabled: boolean
+  jesterEnabled: boolean
+  outlierEnabled: boolean
+  outlierHintsEnabled: boolean
   discussionDurationSeconds: number | null
   round?: number
 }
