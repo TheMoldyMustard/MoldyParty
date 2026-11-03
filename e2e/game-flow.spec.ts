@@ -2,12 +2,14 @@ import { expect, test, type Page } from '@playwright/test'
 
 async function holdReveal(page: Page, player: string) {
   await expect(page.getByRole('heading', { name: `Pass to ${player}` })).toBeVisible()
-  const reveal = page.getByRole('button', { name: 'Hold to reveal your role' })
-  await reveal.hover()
+  const reveal = page.getByRole('button', { name: 'Drag up to reveal your role' })
+  const box = await reveal.boundingBox()
+  if (!box) throw new Error('Reveal control is not visible')
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height * .75)
   await page.mouse.down()
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height * .25)
   await expect(page.getByTestId('private-role')).toBeVisible()
   await page.mouse.up()
-  await expect(page.getByTestId('private-role')).toBeHidden()
   await page.getByRole('button', { name: /seen my role/i }).click()
 }
 
@@ -97,7 +99,7 @@ test('special roles guess privately and every role is revealed', async ({ page }
     await page.getByLabel(`Player ${index + 1} name`).fill(name)
   }
   await page.getByLabel('Jester').check()
-  await page.getByLabel('Outlier').check()
+  await page.getByRole('checkbox', { name: 'Outlier', exact: true }).check()
   await page.getByLabel('Give Outlier a hint').check()
   await page.getByRole('button', { name: 'Start secret round' }).click()
 
@@ -106,9 +108,12 @@ test('special roles guess privately and every role is revealed', async ({ page }
   let secretWord = ''
   for (const player of players) {
     await expect(page.getByRole('heading', { name: `Pass to ${player}` })).toBeVisible()
-    const reveal = page.getByRole('button', { name: 'Hold to reveal your role' })
-    await reveal.hover()
+    const reveal = page.getByRole('button', { name: 'Drag up to reveal your role' })
+    const box = await reveal.boundingBox()
+    if (!box) throw new Error('Reveal control is not visible')
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height * .75)
     await page.mouse.down()
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height * .25)
     const privateRole = page.getByTestId('private-role')
     await expect(privateRole).toBeVisible()
     const role = (await privateRole.locator('strong').textContent())?.trim() ?? ''
@@ -116,7 +121,6 @@ test('special roles guess privately and every role is revealed', async ({ page }
     if (role === 'Outlier') outlier = player
     if (!['Impostor', 'Jester', 'Outlier'].includes(role)) secretWord = role
     await page.mouse.up()
-    await expect(privateRole).toBeHidden()
     await page.getByRole('button', { name: /seen my role/i }).click()
   }
 

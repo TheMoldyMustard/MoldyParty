@@ -150,18 +150,22 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
 .player-number { color: var(--lime); font-size: .78rem; font-weight: 950; }
 .player-input input { width: 100%; min-height: 3rem; border: 0; color: white; background: transparent; font-weight: 750; }
 .player-input input::placeholder { color: #806b89; }
-.category-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; }
-.category-option { position: relative; display: grid; min-height: 8.5rem; align-content: center; gap: .25rem; padding: 1rem; border: 1px solid rgb(255 255 255 / 12%); border-radius: 1.15rem; background: #24112f; cursor: pointer; }
+.category-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 1fr; align-items: stretch; gap: .75rem; }
+.category-option { position: relative; display: grid; min-height: 8.5rem; height: 100%; align-content: center; gap: .35rem; padding: 1rem; border: 1px solid rgb(255 255 255 / 12%); border-radius: 1.15rem; background: #24112f; cursor: pointer; }
 .category-option input { position: absolute; opacity: 0; }
 .category-option--selected { border-color: var(--lime); box-shadow: inset 0 0 0 1px var(--lime); background: #30401f; }
 .category-icon { color: var(--lime); font-size: 1.55rem; }
+.category-option__name { overflow-wrap: anywhere; }
 .category-option small { color: #aa95b2; }
-.rule-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .8rem; }
-.rule-grid > label, .stack > label { display: grid; gap: .45rem; color: #d8cadc; font-size: .82rem; font-weight: 800; }
-.rule-grid input:not([type="checkbox"]), .rule-grid select, .stack input, .stack textarea {
+.rule-groups { display: grid; gap: 1rem; }
+.rule-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; min-width: 0; margin: 0; padding: 1rem; border: 1px solid rgb(255 255 255 / 10%); border-radius: 1.2rem; background: rgb(36 17 47 / 42%); }
+.rule-group legend { padding-inline: .4rem; color: var(--lime); font-size: .76rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.rule-group > label, .stack > label { display: grid; gap: .45rem; color: #d8cadc; font-size: .82rem; font-weight: 800; }
+.rule-group input:not([type="checkbox"]), .rule-group select, .stack input, .stack textarea {
   width: 100%; min-height: 3.25rem; border: 1px solid rgb(255 255 255 / 16%); border-radius: .9rem; padding: .7rem .85rem; color: white; background: #24112f;
 }
 .switch-row { grid-template-columns: 1fr auto; align-items: center; padding: .8rem 1rem; border: 1px solid rgb(255 255 255 / 12%); border-radius: 1rem; background: #24112f; }
+.switch-row--disabled, .field--disabled { opacity: .55; }
 .switch-row span { display: grid; gap: .15rem; }
 .switch-row small { color: #927c9b; font-weight: 500; }
 .switch-row input { width: 3rem; height: 1.5rem; accent-color: var(--lime); }
@@ -177,7 +181,7 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
 .reveal-instruction, .role-card { display: flex; height: 100%; flex-direction: column; align-items: center; justify-content: center; gap: .55rem; }
 .reveal-instruction strong { font-size: 1.45rem; }
 .reveal-instruction small { color: #a991b1; }
-.role-card strong { font-size: clamp(2.5rem, 10vw, 5rem); line-height: .95; letter-spacing: -.05em; }
+.role-card strong { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; font-size: clamp(2.5rem, 10vw, 5rem); line-height: .95; letter-spacing: -.05em; }
 .role-card small { color: var(--lime); font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
 .role-card em { margin-top: .5rem; color: #dbcde0; font-style: normal; }
 .role-card--impostor small, .role-card--impostor strong { color: #ff8377; }
@@ -259,7 +263,7 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
 }
 @media (max-width: 700px) {
   .category-grid { grid-template-columns: repeat(2, 1fr); }
-  .rule-grid, .reveal-summary { grid-template-columns: 1fr; }
+  .rule-group, .reveal-summary { grid-template-columns: 1fr; }
   .role-roster { grid-template-columns: 1fr; }
   .word-row { grid-template-columns: 1fr; }
   .ai-helper { grid-template-columns: 1fr; align-items: stretch; }

@@ -63,6 +63,42 @@ describe('PackManager', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('That is not valid JSON.')
   })
 
+  it('reports the imported pack id after a valid import', async () => {
+    const user = userEvent.setup()
+    const repository = fakeRepository()
+    const onImported = vi.fn()
+    render(<PackManager repository={repository} onImported={onImported} />)
+
+    await user.click(screen.getByRole('tab', { name: 'Import JSON' }))
+    await user.click(screen.getByLabelText('Paste pack JSON'))
+    await user.paste(JSON.stringify({
+      packName: 'Imported Friends',
+      category: 'Custom',
+      items: [{ word: 'Taylor', hint: 'Singer' }],
+    }))
+    await user.click(screen.getByRole('button', { name: 'Import pack' }))
+
+    expect(onImported).toHaveBeenCalledWith(expect.any(String))
+    expect(repository.put).toHaveBeenCalledWith(expect.objectContaining({ packName: 'Imported Friends' }))
+  })
+
+  it('keeps the import view and reports storage failures', async () => {
+    const user = userEvent.setup()
+    const repository = fakeRepository()
+    repository.put = vi.fn().mockRejectedValue(new Error('Storage unavailable'))
+    const onImported = vi.fn()
+    render(<PackManager repository={repository} onImported={onImported} />)
+
+    await user.click(screen.getByRole('tab', { name: 'Import JSON' }))
+    await user.click(screen.getByLabelText('Paste pack JSON'))
+    await user.paste(JSON.stringify({ packName: 'Broken Import', category: 'Custom', items: [{ word: 'Taylor', hint: 'Singer' }] }))
+    await user.click(screen.getByRole('button', { name: 'Import pack' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Storage unavailable')
+    expect(screen.getByRole('tab', { name: 'Import JSON' })).toHaveAttribute('aria-selected', 'true')
+    expect(onImported).not.toHaveBeenCalled()
+  })
+
   it('edits a saved pack in place and preserves its id', async () => {
     const user = userEvent.setup()
     const savedPack = {

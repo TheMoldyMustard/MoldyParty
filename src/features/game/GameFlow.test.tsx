@@ -20,11 +20,10 @@ async function openConfiguredLobby() {
 
 async function revealAndConfirm(user: ReturnType<typeof userEvent.setup>, playerName: string) {
   expect(screen.getByRole('heading', { name: `Pass to ${playerName}` })).toBeInTheDocument()
-  const reveal = screen.getByRole('button', { name: /hold to reveal/i })
-  fireEvent.pointerDown(reveal)
+  const reveal = screen.getByRole('button', { name: /drag up to reveal/i })
+  fireEvent.pointerDown(reveal, { pointerId: 1, clientY: 300, clientX: 100 })
+  fireEvent.pointerMove(reveal, { pointerId: 1, clientY: 230, clientX: 100 })
   expect(screen.getByTestId('private-role')).toBeInTheDocument()
-  fireEvent.pointerUp(reveal)
-  expect(screen.queryByTestId('private-role')).not.toBeInTheDocument()
   await user.click(screen.getByRole('button', { name: /seen my role/i }))
 }
 
@@ -71,9 +70,10 @@ describe('Impostor game interface', () => {
 
     expect(screen.getByLabelText('Jester')).not.toBeChecked()
     expect(screen.getByLabelText('Outlier')).not.toBeChecked()
-    expect(screen.queryByLabelText('Give Outlier a hint')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Give Outlier a hint')).toBeDisabled()
 
     await user.click(screen.getByLabelText('Outlier'))
+    expect(screen.getByLabelText('Give Outlier a hint')).not.toBeDisabled()
     expect(screen.getByLabelText('Give Outlier a hint')).not.toBeChecked()
   })
 
@@ -111,16 +111,17 @@ describe('Impostor game interface', () => {
     await revealAndConfirm(user, 'Alex')
     await revealAndConfirm(user, 'Blair')
 
-    const jesterReveal = screen.getByRole('button', { name: /hold to reveal/i })
-    fireEvent.pointerDown(jesterReveal)
+    const jesterReveal = screen.getByRole('button', { name: /drag up to reveal/i })
+    fireEvent.pointerDown(jesterReveal, { pointerId: 1, clientY: 300, clientX: 100 })
+    fireEvent.pointerMove(jesterReveal, { pointerId: 1, clientY: 230, clientX: 100 })
     expect(screen.getByTestId('private-role')).toHaveTextContent('Jester')
     expect(screen.getByTestId('private-role')).toHaveTextContent('Get yourself voted out')
     expect(screen.getByTestId('private-role')).not.toHaveTextContent('Moon')
-    fireEvent.pointerUp(jesterReveal)
     await user.click(screen.getByRole('button', { name: /seen my role/i }))
 
-    const outlierReveal = screen.getByRole('button', { name: /hold to reveal/i })
-    fireEvent.pointerDown(outlierReveal)
+    const outlierReveal = screen.getByRole('button', { name: /drag up to reveal/i })
+    fireEvent.pointerDown(outlierReveal, { pointerId: 1, clientY: 300, clientX: 100 })
+    fireEvent.pointerMove(outlierReveal, { pointerId: 1, clientY: 230, clientX: 100 })
     expect(screen.getByTestId('private-role')).toHaveTextContent('Outlier')
     expect(screen.getByTestId('private-role')).toHaveTextContent('Guess the secret word after voting')
     expect(screen.getByTestId('private-role')).toHaveTextContent('Hint: Orbit')
@@ -130,12 +131,32 @@ describe('Impostor game interface', () => {
   it('masks a revealed role when focus leaves the reveal control', async () => {
     const user = await openConfiguredLobby()
     await user.click(screen.getByRole('button', { name: 'Start secret round' }))
-    const reveal = screen.getByRole('button', { name: /hold to reveal/i })
+    const reveal = screen.getByRole('button', { name: /drag up to reveal/i })
 
     fireEvent.keyDown(reveal, { key: ' ' })
     expect(screen.getByTestId('private-role')).toBeInTheDocument()
     fireEvent.blur(reveal)
     expect(screen.queryByTestId('private-role')).not.toBeInTheDocument()
+  })
+
+  it('only reveals after an upward drag crosses the gesture threshold', async () => {
+    const user = await openConfiguredLobby()
+    await user.click(screen.getByRole('button', { name: 'Start secret round' }))
+    const reveal = screen.getByRole('button', { name: /drag up to reveal/i })
+
+    fireEvent.pointerDown(reveal, { pointerId: 1, clientY: 300, clientX: 100 })
+    fireEvent.pointerMove(reveal, { pointerId: 1, clientY: 260, clientX: 100 })
+    expect(screen.queryByTestId('private-role')).not.toBeInTheDocument()
+    fireEvent.pointerUp(reveal, { pointerId: 1, clientY: 260, clientX: 100 })
+
+    fireEvent.pointerDown(reveal, { pointerId: 2, clientY: 300, clientX: 100 })
+    fireEvent.pointerMove(reveal, { pointerId: 2, clientY: 330, clientX: 100 })
+    expect(screen.queryByTestId('private-role')).not.toBeInTheDocument()
+    fireEvent.pointerUp(reveal, { pointerId: 2, clientY: 330, clientX: 100 })
+
+    fireEvent.pointerDown(reveal, { pointerId: 3, clientY: 300, clientX: 100 })
+    fireEvent.pointerMove(reveal, { pointerId: 3, clientY: 230, clientX: 100 })
+    expect(screen.getByTestId('private-role')).toBeInTheDocument()
   })
 
   it('collects the Outlier guess behind a private hand-off before showing results', async () => {

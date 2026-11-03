@@ -15,6 +15,8 @@ type AppView = 'home' | 'lobby' | 'packs'
 function AppContent() {
   const [view, setView] = useState<AppView>('home')
   const [lobbyDraft, setLobbyDraft] = useState<LobbyDraft | null>(null)
+  const [preferredPackId, setPreferredPackId] = useState<string | null>(null)
+  const [lobbyNotice, setLobbyNotice] = useState('')
   const game = useGameStore((state) => state.game)
   const changeCategory = useGameStore((state) => state.changeCategory)
   const returnToLobby = useGameStore((state) => state.returnToLobby)
@@ -28,15 +30,15 @@ function AppContent() {
     onReturnToLobby={() => { returnToLobby(); setView('home') }}
   />
 
-  if (view === 'lobby') return <LobbyScreen draft={lobbyDraft} onDraftChange={setLobbyDraft} onBack={() => setView('home')} onManagePacks={() => setView('packs')} />
-  if (view === 'packs') return <main className="screen"><nav className="topbar"><button className="text-button" onClick={() => setView('lobby')}>← Back to setup</button></nav><PackManager /></main>
+  if (view === 'lobby') return <LobbyScreen draft={lobbyDraft} preferredPackId={preferredPackId} onPreferredPackApplied={() => setPreferredPackId(null)} notice={lobbyNotice} onDraftChange={setLobbyDraft} onBack={() => setView('home')} onManagePacks={() => setView('packs')} />
+  if (view === 'packs') return <main className="screen"><nav className="topbar"><button className="text-button" onClick={() => setView('lobby')}>← Back to setup</button></nav><PackManager onImported={(packId) => { setPreferredPackId(packId); setLobbyNotice('Pack imported and ready in your round.'); setView('lobby') }} /></main>
 
   return (
     <main className="app-shell">
       <header className="brand-lockup">
-        <span className="eyebrow">Pass it. Bluff it. Find them.</span>
+        <span className="eyebrow">Offline party games for suspicious friends</span>
         <h1>MoldyParty</h1>
-        <p>Offline party games made for one shared screen.</p>
+        <p>Pick a game, pass the device, and make your own fun anywhere.</p>
       </header>
 
       <section className="game-card" aria-labelledby="impostor-title">

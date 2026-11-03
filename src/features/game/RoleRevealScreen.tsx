@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useGameStore } from '../../store/gameStore'
+
+const REVEAL_DISTANCE_PX = 56
 
 export default function RoleRevealScreen() {
   const game = useGameStore((state) => state.game)!
@@ -7,6 +9,7 @@ export default function RoleRevealScreen() {
   const hideRole = useGameStore((state) => state.hideRole)
   const confirmRole = useGameStore((state) => state.confirmRole)
   const [hasRevealed, setHasRevealed] = useState(false)
+  const gestureStart = useRef<{ pointerId: number; x: number; y: number } | null>(null)
   const player = game.players[game.currentRevealIndex]
 
   const roleContent = (() => {
@@ -26,12 +29,10 @@ export default function RoleRevealScreen() {
     const mask = () => hideRole()
     const maskWhenHidden = () => { if (document.visibilityState !== 'visible') hideRole() }
     window.addEventListener('blur', mask)
-    window.addEventListener('pointerup', mask)
     window.addEventListener('pointercancel', mask)
     document.addEventListener('visibilitychange', maskWhenHidden)
     return () => {
       window.removeEventListener('blur', mask)
-      window.removeEventListener('pointerup', mask)
       window.removeEventListener('pointercancel', mask)
       document.removeEventListener('visibilitychange', maskWhenHidden)
     }
@@ -49,26 +50,31 @@ export default function RoleRevealScreen() {
       <button
         className="reveal-pad"
         type="button"
-        aria-label="Hold to reveal your role"
+        aria-label="Drag up to reveal your role"
         onPointerDown={(event) => {
           event.currentTarget.setPointerCapture?.(event.pointerId)
-          reveal()
+          gestureStart.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY }
+        }}
+        onPointerMove={(event) => {
+          const start = gestureStart.current
+          if (!start || start.pointerId !== event.pointerId || game.isRoleVisible) return
+          const deltaY = start.y - event.clientY
+          const deltaX = Math.abs(event.clientX - start.x)
+          if (deltaY >= REVEAL_DISTANCE_PX && deltaY > deltaX) reveal()
         }}
         onPointerUp={(event) => {
           if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-          hideRole()
+          gestureStart.current = null
         }}
-        onPointerCancel={hideRole}
-        onPointerLeave={hideRole}
+        onPointerCancel={() => { gestureStart.current = null; hideRole() }}
         onBlur={hideRole}
         onKeyDown={(event) => { if (event.key === ' ' || event.key === 'Enter') reveal() }}
-        onKeyUp={(event) => { if (event.key === ' ' || event.key === 'Enter') hideRole() }}
       >
         {game.isRoleVisible ? (
           <span className={`role-card role-card--${player.role.toLowerCase()}`} data-testid="private-role">
             {roleContent}
           </span>
-        ) : <span className="reveal-instruction"><strong>Hold to reveal</strong><small>Release to hide instantly</small></span>}
+        ) : <span className="reveal-instruction"><strong>Drag up to reveal</strong><small>Swipe upward, then tap when you’re done</small></span>}
       </button>
 
       <button className="button button--secondary" type="button" disabled={!hasRevealed} onClick={confirmRole}>I’ve seen my role</button>

@@ -9,6 +9,7 @@ import AiPromptHelper from './AiPromptHelper'
 interface PackManagerProps {
   repository?: PackRepository
   onPacksChanged?: (packs: WordPack[]) => void
+  onImported?: (packId: string) => void
 }
 
 const emptyItem = (): WordItem => ({ word: '', hint: '' })
@@ -16,6 +17,7 @@ const emptyItem = (): WordItem => ({ word: '', hint: '' })
 export default function PackManager({
   repository = packRepository,
   onPacksChanged,
+  onImported,
 }: PackManagerProps) {
   const [mode, setMode] = useState<'manual' | 'import'>('manual')
   const [packName, setPackName] = useState('')
@@ -23,6 +25,7 @@ export default function PackManager({
   const [jsonText, setJsonText] = useState('')
   const [savedPacks, setSavedPacks] = useState<WordPack[]>([])
   const [message, setMessage] = useState('')
+  const [messageKind, setMessageKind] = useState<'status' | 'alert'>('status')
   const [editingPackId, setEditingPackId] = useState<string | null>(null)
   const parsedImport = useMemo(() => parseWordPackJson(jsonText), [jsonText])
 
@@ -77,6 +80,7 @@ export default function PackManager({
       createdAt: existing.createdAt,
     } : result.pack)
     setMessage(existing ? 'Pack updated on this device.' : 'Pack saved on this device.')
+    setMessageKind('status')
     setEditingPackId(null)
     setPackName('')
     setItems([emptyItem()])
@@ -85,10 +89,17 @@ export default function PackManager({
 
   async function importPack() {
     if (!parsedImport.ok) return
-    await repository.put(parsedImport.pack)
-    setMessage('Pack imported on this device.')
-    setJsonText('')
-    await refresh()
+    try {
+      await repository.put(parsedImport.pack)
+      setMessage('Pack imported on this device.')
+      setMessageKind('status')
+      setJsonText('')
+      await refresh()
+      onImported?.(parsedImport.pack.id)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'The pack could not be imported.')
+      setMessageKind('alert')
+    }
   }
 
   async function uploadFile(event: ChangeEvent<HTMLInputElement>) {
@@ -176,7 +187,7 @@ export default function PackManager({
         </div>
       )}
 
-      {message && <p className="status-message" role="status">{message}</p>}
+      {message && <p className={messageKind === 'alert' ? 'status-message status-message--error' : 'status-message'} role={messageKind}>{message}</p>}
 
       <div className="saved-packs">
         <h3>Saved on this device</h3>

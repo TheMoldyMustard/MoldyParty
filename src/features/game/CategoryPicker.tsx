@@ -19,7 +19,7 @@ export default function CategoryPicker({ packs, selectedId, onSelect, onManagePa
           <label className={`category-option ${selectedId === pack.id ? 'category-option--selected' : ''}`} key={pack.id}>
             <input type="radio" name="category" value={pack.id} checked={selectedId === pack.id} onChange={() => onSelect(pack.id)} />
             <span className="category-icon" aria-hidden="true">{pack.source === 'custom' ? '✦' : pack.packName === 'Animals' ? '◌' : pack.packName === 'Places' ? '⌂' : '◆'}</span>
-            <strong>{pack.packName}</strong>
+            <strong className="category-option__name">{pack.packName}</strong>
             <small>{pack.items.length} words</small>
           </label>
         ))}
