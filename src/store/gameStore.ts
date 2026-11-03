@@ -42,6 +42,7 @@ function normalizePersistedSetup(value: unknown): GameSetupInput | null {
     jesterEnabled: typeof value.jesterEnabled === 'boolean' ? value.jesterEnabled : false,
     outlierEnabled: typeof value.outlierEnabled === 'boolean' ? value.outlierEnabled : false,
     outlierHintsEnabled: typeof value.outlierHintsEnabled === 'boolean' ? value.outlierHintsEnabled : false,
+    absoluteVotingEnabled: typeof value.absoluteVotingEnabled === 'boolean' ? value.absoluteVotingEnabled : false,
   } as unknown as GameSetupInput
   return validateSetup(normalized).length === 0 ? normalized : null
 }
@@ -122,7 +123,7 @@ export interface GameStoreState {
   pauseDiscussionTimer: () => void
   resumeDiscussionTimer: () => void
   syncDiscussionTimer: () => void
-  playAgain: () => void
+  playAgain: (options?: { absoluteVotingEnabled?: boolean }) => void
   changeCategory: () => void
   returnToLobby: () => void
 }
@@ -185,7 +186,7 @@ export function createGameStore(
       ? {
           game: startVoting(state.game),
           pendingVote: undefined,
-          isVoteReady: false,
+          isVoteReady: state.game.absoluteVotingEnabled,
         }
       : state,
     ),
@@ -208,7 +209,7 @@ export function createGameStore(
       return {
         game: recordVote(state.game, state.pendingVote),
         pendingVote: undefined,
-        isVoteReady: false,
+        isVoteReady: state.game.absoluteVotingEnabled && state.game.currentVoterIndex < state.game.players.length - 1,
       }
     }),
 
@@ -271,7 +272,7 @@ export function createGameStore(
       }
     }),
 
-    playAgain: () => set((state) => {
+    playAgain: (options) => set((state) => {
       if (!state.setup) return state
       const replayPack = state.game && state.setup.pack.items.length > 1
         ? {
@@ -282,9 +283,14 @@ export function createGameStore(
       return {
         game: createRound({
           ...state.setup,
+          absoluteVotingEnabled: options?.absoluteVotingEnabled ?? state.setup.absoluteVotingEnabled,
           pack: replayPack,
           round: (state.game?.round ?? 0) + 1,
         }, random),
+        setup: {
+          ...state.setup,
+          absoluteVotingEnabled: options?.absoluteVotingEnabled ?? state.setup.absoluteVotingEnabled,
+        },
         pendingVote: undefined,
         isVoteReady: false,
         pendingOutlierGuess: '',
@@ -320,7 +326,7 @@ export function createGameStore(
     }),
   }), {
     name: storageName,
-    version: 2,
+    version: 3,
     storage: createJSONStorage(() => storage),
     partialize: (state) => ({
       setup: state.setup,
@@ -336,16 +342,24 @@ export function createGameStore(
         ...current,
         ...saved,
         setup: normalizePersistedSetup(saved.setup),
-        game: saved.game ? { ...saved.game, isRoleVisible: false } : null,
+        game: saved.game ? { ...saved.game, isRoleVisible: false, absoluteVotingEnabled: saved.game.absoluteVotingEnabled === true } : null,
         pendingVote: undefined,
-        isVoteReady: false,
+        isVoteReady: saved.game?.phase === 'VOTING' && saved.game.absoluteVotingEnabled === true,
         pendingOutlierGuess: '',
         isOutlierGuessReady: false,
       }
     },
     migrate: (persisted, version) => {
       const saved = persisted as Partial<GameStoreState>
-      if (version >= 2) return saved
+      if (version >= 3) return saved
+
+      if (version >= 2) {
+        const setup = normalizePersistedSetup(saved.setup)
+        const game = isRecord(saved.game)
+          ? { ...saved.game, absoluteVotingEnabled: saved.game.absoluteVotingEnabled === true, isRoleVisible: false }
+          : null
+        return { ...saved, setup, game }
+      }
 
       const setup = normalizePersistedSetup(saved.setup)
       const game = isRecoverableGame(saved.game) ? {
@@ -353,6 +367,7 @@ export function createGameStore(
         jesterEnabled: saved.game.jesterEnabled ?? false,
         outlierEnabled: saved.game.outlierEnabled ?? false,
         outlierHintsEnabled: saved.game.outlierHintsEnabled ?? false,
+        absoluteVotingEnabled: false,
         currentOutlierGuessIndex: saved.game.currentOutlierGuessIndex ?? 0,
         outlierGuesses: saved.game.outlierGuesses ?? [],
         isRoleVisible: false,

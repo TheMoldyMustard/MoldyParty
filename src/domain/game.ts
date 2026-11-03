@@ -106,6 +106,7 @@ export function createRound(input: GameSetupInput, random: () => number = Math.r
     jesterEnabled: input.jesterEnabled,
     outlierEnabled: input.outlierEnabled,
     outlierHintsEnabled: input.outlierEnabled && input.outlierHintsEnabled,
+    absoluteVotingEnabled: input.absoluteVotingEnabled,
     discussionDurationSeconds: input.discussionDurationSeconds,
     currentRevealIndex: 0,
     isRoleVisible: false,

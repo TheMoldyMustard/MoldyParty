@@ -40,6 +40,33 @@ test('three players can complete a private round and replay', async ({ page }) =
   await expect(page.getByText('Round 2')).toBeVisible()
 })
 
+test('Absolute Voting completes a round without device handoffs', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: /set up a round/i }).click()
+
+  for (const [index, name] of ['Alex', 'Blair', 'Casey'].entries()) {
+    await page.getByLabel(`Player ${index + 1} name`).fill(name)
+  }
+  await page.getByLabel('Absolute Voting').check()
+  await page.getByRole('button', { name: 'Start secret round' }).click()
+
+  await holdReveal(page, 'Alex')
+  await holdReveal(page, 'Blair')
+  await holdReveal(page, 'Casey')
+  await page.getByRole('button', { name: 'Proceed to voting' }).click()
+
+  await expect(page.getByText('Everyone can see this ballot')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Pass to Alex' })).toHaveCount(0)
+  for (const target of ['Blair', 'Alex', 'Blair']) {
+    await page.getByRole('group', { name: 'Vote for one player' }).getByRole('button', { name: target }).click()
+    await page.getByRole('button', { name: 'Lock in vote' }).click()
+  }
+
+  await expect(page.getByRole('heading', { name: /was voted out|Nobody was voted out|vote was tied/ })).toBeVisible()
+  await page.getByRole('button', { name: 'Absolute Voting' }).click()
+  await expect(page.getByText('Round 2')).toBeVisible()
+})
+
 test('special roles guess privately and every role is revealed', async ({ page }) => {
   const players = ['Alex', 'Blair', 'Casey', 'Devon', 'Emery']
   await page.goto('/')

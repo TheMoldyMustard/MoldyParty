@@ -59,7 +59,8 @@ export default function GameOverScreen({ onChangeCategory, onReturnToLobby }: Ga
         </ul>
       </section>
       <div className="result-actions">
-        <button className="button button--hero" type="button" onClick={playAgain}>Play again</button>
+        <button className="button button--hero" type="button" onClick={() => playAgain()}>Play again</button>
+        <button className="button button--secondary" type="button" onClick={() => playAgain({ absoluteVotingEnabled: true })}>Absolute Voting</button>
         <button className="button button--secondary" type="button" onClick={onChangeCategory}>Change category</button>
         <button className="text-button" type="button" onClick={onReturnToLobby}>Return to lobby</button>
       </div>

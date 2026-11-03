@@ -62,6 +62,7 @@ export interface GameState {
   jesterEnabled: boolean
   outlierEnabled: boolean
   outlierHintsEnabled: boolean
+  absoluteVotingEnabled: boolean
   discussionDurationSeconds: number | null
   currentRevealIndex: number
   isRoleVisible: boolean
@@ -80,6 +81,7 @@ export interface GameSetupInput {
   jesterEnabled: boolean
   outlierEnabled: boolean
   outlierHintsEnabled: boolean
+  absoluteVotingEnabled: boolean
   discussionDurationSeconds: number | null
   round?: number
 }

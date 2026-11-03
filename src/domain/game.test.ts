@@ -29,6 +29,7 @@ const validSetup = {
   jesterEnabled: false,
   outlierEnabled: false,
   outlierHintsEnabled: false,
+  absoluteVotingEnabled: false,
   discussionDurationSeconds: 180,
 }
 
@@ -93,6 +94,12 @@ describe('createRound', () => {
 
     expect(state.currentHint).toBe('Water')
     expect(state.hintsEnabled).toBe(false)
+  })
+
+  it('copies Absolute Voting into the round state', () => {
+    const state = createRound({ ...validSetup, absoluteVotingEnabled: true }, () => 0)
+
+    expect(state.absoluteVotingEnabled).toBe(true)
   })
 
   it('randomly selects one hint from a five-hint pool', () => {

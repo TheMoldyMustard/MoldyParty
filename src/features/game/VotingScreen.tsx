@@ -10,15 +10,15 @@ export default function VotingScreen() {
   const confirmVote = useGameStore((state) => state.confirmVote)
   const voter = game.players[game.currentVoterIndex]
 
-  if (!isVoteReady) {
+  if (!isVoteReady && !game.absoluteVotingEnabled) {
     return <PassDeviceMask playerName={voter.name} eyebrow={`Secret vote · ${game.currentVoterIndex + 1} of ${game.players.length}`} actionLabel={`I’m ${voter.name}`} onReady={showVote} />
   }
 
   return (
     <main className="screen voting-screen">
-      <span className="eyebrow">{voter.name}’s secret ballot</span>
+      <span className="eyebrow">{game.absoluteVotingEnabled ? `Open vote · ${game.currentVoterIndex + 1} of ${game.players.length}` : `${voter.name}’s secret ballot`}</span>
       <h1>Who is the impostor?</h1>
-      <p>Your choice stays hidden after you lock it in.</p>
+      <p>{game.absoluteVotingEnabled ? 'Everyone can see this ballot. Vote together, then lock it in.' : 'Your choice stays hidden after you lock it in.'}</p>
       <div className="ballot-grid" role="group" aria-label="Vote for one player">
         {game.players.filter((player) => player.id !== voter.id).map((player) => (
           <button aria-pressed={pendingVote === player.id} className={pendingVote === player.id ? 'selected' : ''} type="button" key={player.id} onClick={() => castVote(player.id)}>{player.name}</button>

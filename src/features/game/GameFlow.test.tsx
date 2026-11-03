@@ -101,6 +101,7 @@ describe('Impostor game interface', () => {
       jesterEnabled: true,
       outlierEnabled: true,
       outlierHintsEnabled: true,
+      absoluteVotingEnabled: false,
       discussionDurationSeconds: null,
     }
     gameStore.setState({ game: createRound(setup, () => 0), setup })
@@ -152,6 +153,7 @@ describe('Impostor game interface', () => {
       jesterEnabled: false,
       outlierEnabled: true,
       outlierHintsEnabled: false,
+      absoluteVotingEnabled: false,
       discussionDurationSeconds: null,
     }
     const game = createRound(setup, () => 0)
@@ -212,8 +214,28 @@ describe('Impostor game interface', () => {
     expect(screen.getByRole('heading', { name: 'Blair was voted out' })).toBeInTheDocument()
     expect(screen.getByText(/secret word/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Play again' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Absolute Voting' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Change category' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Return to lobby' })).toBeInTheDocument()
+  })
+
+  it('uses a public ballot without passing the device when Absolute Voting is enabled', async () => {
+    const user = await openConfiguredLobby()
+    expect(screen.getByLabelText('Absolute Voting')).not.toBeChecked()
+    await user.click(screen.getByLabelText('Absolute Voting'))
+    await user.click(screen.getByRole('button', { name: 'Start secret round' }))
+
+    await revealAndConfirm(user, 'Alex')
+    await revealAndConfirm(user, 'Blair')
+    await revealAndConfirm(user, 'Casey')
+    await user.click(screen.getByRole('button', { name: 'Proceed to voting' }))
+
+    expect(screen.queryByRole('heading', { name: 'Pass to Alex' })).not.toBeInTheDocument()
+    expect(screen.getByText(/Everyone can see this ballot/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Blair' }))
+    await user.click(screen.getByRole('button', { name: 'Lock in vote' }))
+
+    expect(screen.getByText('Open vote · 2 of 3')).toBeInTheDocument()
   })
 
   it('reveals every player role and each special-role outcome at round end', () => {
@@ -231,6 +253,7 @@ describe('Impostor game interface', () => {
       jesterEnabled: true,
       outlierEnabled: true,
       outlierHintsEnabled: false,
+      absoluteVotingEnabled: false,
       discussionDurationSeconds: null,
     }
     const game = createRound(setup, () => 0)
@@ -278,7 +301,9 @@ describe('Impostor game interface', () => {
     }
 
     expect(screen.getByRole('heading', { name: 'Nobody was voted out' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Play again' }))
+    await user.click(screen.getByRole('button', { name: 'Absolute Voting' }))
+    expect(gameStore.getState().game?.absoluteVotingEnabled).toBe(true)
+    expect(gameStore.getState().setup?.absoluteVotingEnabled).toBe(true)
     expect(screen.getByText('Round 2')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Pass to Alex' })).toBeInTheDocument()
   })

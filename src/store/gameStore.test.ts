@@ -16,6 +16,7 @@ const setup: GameSetupInput = {
   jesterEnabled: false,
   outlierEnabled: false,
   outlierHintsEnabled: false,
+  absoluteVotingEnabled: false,
   discussionDurationSeconds: 180,
 }
 
@@ -57,6 +58,36 @@ describe('game store', () => {
       { voterId: 'player-1', targetId: 'player-2' },
     ])
     expect(store.getState().isVoteReady).toBe(false)
+  })
+
+  it('starts Absolute Voting ready without a pass-device handoff for every voter', () => {
+    const store = createGameStore('absolute-vote-flow', () => 0)
+    store.getState().startGame({ ...setup, absoluteVotingEnabled: true })
+    store.getState().confirmRole()
+    store.getState().confirmRole()
+    store.getState().confirmRole()
+    store.getState().beginVoting()
+
+    expect(store.getState().game?.absoluteVotingEnabled).toBe(true)
+    expect(store.getState().isVoteReady).toBe(true)
+    store.getState().castVote('player-2')
+    store.getState().confirmVote()
+
+    expect(store.getState().game?.currentVoterIndex).toBe(1)
+    expect(store.getState().isVoteReady).toBe(true)
+  })
+
+  it('replays with Absolute Voting when the result shortcut is used', () => {
+    const store = createGameStore('absolute-replay', () => 0)
+    store.getState().startGame(setup)
+    store.getState().playAgain({ absoluteVotingEnabled: true })
+
+    expect(store.getState().game).toMatchObject({
+      phase: 'ROLE_REVEAL',
+      round: 2,
+      absoluteVotingEnabled: true,
+    })
+    expect(store.getState().setup?.absoluteVotingEnabled).toBe(true)
   })
 
   it('replays with the same setup and increments the round', () => {
@@ -240,6 +271,25 @@ describe('game store', () => {
       currentOutlierGuessIndex: 0,
       outlierGuesses: [],
     })
+  })
+
+  it('migrates version 2 rounds to private voting when the mode is missing', async () => {
+    const source = createGameStore('absolute-v2-source', () => 0)
+    source.getState().startGame(setup)
+    const legacyRound = structuredClone(source.getState().game!) as unknown as Record<string, unknown>
+    delete legacyRound.absoluteVotingEnabled
+    const legacySetup = structuredClone(setup) as unknown as Record<string, unknown>
+    delete legacySetup.absoluteVotingEnabled
+    localStorage.setItem('absolute-v2-migration', JSON.stringify({
+      state: { setup: legacySetup, game: legacyRound, lobbyIntent: 'default' },
+      version: 2,
+    }))
+
+    const restored = createGameStore('absolute-v2-migration', () => 0)
+    await restored.persist.rehydrate()
+
+    expect(restored.getState().setup?.absoluteVotingEnabled).toBe(false)
+    expect(restored.getState().game?.absoluteVotingEnabled).toBe(false)
   })
 
   it('drops a malformed legacy round while preserving its editable setup', async () => {

@@ -37,7 +37,7 @@ Install Playwright's browser once on a new machine with `npx playwright install 
 2. Choose fewer impostors than players, a built-in or custom category, optional hints, and an optional discussion timer. You can also enable one Jester and one Outlier, while leaving at least one Innocent in the round.
 3. Pass the device. Each player deliberately holds the reveal surface to see their role; releasing it masks the secret immediately. The Jester tries to get voted out. The Outlier tries to guess the word and receives no hint unless the dedicated Outlier hint setting is enabled.
 4. Discuss until the group chooses to proceed. The timer never advances the game automatically.
-5. Pass the device again for private voting. Players may select anyone except themselves or skip.
+5. Vote privately by passing the device again, or enable **Absolute Voting** in setup to vote openly together without the voting handoff. Players may select anyone except themselves or skip. The result screen also offers Absolute Voting as a shortcut for the next round.
 6. If an Outlier is enabled, pass the device privately to them for one guess after voting. Matching ignores surrounding whitespace and letter case; being voted out does not affect the Outlier's result.
 7. A unique vote leader is revealed. A tie or all-skipped ballot eliminates nobody. The secret word, special-role outcomes, and every player's role are then shown.
 
@@ -65,7 +65,7 @@ Each new-format item contains five hints; one is selected randomly when the roun
 ## Architecture
 
 - React, TypeScript, Vite, and Tailwind CSS provide the responsive interface.
-- Pure functions in `src/domain` own validation, role assignment, phase transitions, ballots, ties, and results.
+- Pure functions in `src/domain` own validation, role assignment, phase transitions, ballots, ties, and results. Voting can be private (pass-device) or Absolute Voting (public/no-handoff); both use the same ballot and result rules.
 - Zustand coordinates the finite-state lifecycle (`LOBBY → ROLE_REVEAL → DISCUSSION → VOTING → OUTLIER_GUESS? → GAME_OVER`) and persists in-progress recovery.
 - Dexie stores custom packs in IndexedDB.
 - `vite-plugin-pwa`/Workbox precaches the application shell and supplies an offline navigation fallback.
