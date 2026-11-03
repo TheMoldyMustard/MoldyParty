@@ -1,5 +1,5 @@
 import 'fake-indexeddb/auto'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from './App'
@@ -95,6 +95,88 @@ describe('MoldyParty app shell', () => {
     await user.click(screen.getByRole('button', { name: 'Continue a session' }))
 
     expect(screen.getByRole('heading', { name: 'Pass to Blair' })).toBeInTheDocument()
+  })
+
+  it('can cancel or confirm aborting an active game without recording it', async () => {
+    gameStore.getState().createSession('Friday Crew')
+    gameStore.getState().startGame(setup)
+    const sessionId = gameStore.getState().activeSessionId!
+    const user = userEvent.setup()
+    render(<App />)
+
+    expect(screen.getByRole('button', { name: 'Abort game' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Abort game' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('Abort this game?')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByRole('heading', { name: 'Pass to Alex' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Abort game' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Abort game' }))
+
+    expect(screen.getByRole('heading', { name: 'Impostor sessions' })).toBeInTheDocument()
+    expect(gameStore.getState().sessionsById[sessionId].currentGame).toBeNull()
+    expect(gameStore.getState().sessionsById[sessionId].completedRounds).toBe(0)
+  })
+
+  it('does not show abort controls after a round is complete', () => {
+    gameStore.getState().createSession('Friday Crew')
+    gameStore.getState().startGame(setup)
+    gameStore.getState().confirmRole(); gameStore.getState().confirmRole(); gameStore.getState().confirmRole()
+    gameStore.getState().beginVoting()
+    for (const targetId of ['player-2', 'player-1', 'player-2']) {
+      gameStore.getState().showVote()
+      gameStore.getState().castVote(targetId)
+      gameStore.getState().confirmVote()
+    }
+
+    render(<App />)
+
+    expect(screen.getByRole('heading', { name: 'Blair was voted out' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Abort game' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the abort control available through discussion and voting', async () => {
+    gameStore.getState().createSession('Friday Crew')
+    gameStore.getState().startGame({ ...setup, discussionDurationSeconds: 180 })
+    gameStore.getState().confirmRole(); gameStore.getState().confirmRole(); gameStore.getState().confirmRole()
+    const user = userEvent.setup()
+    render(<App />)
+
+    expect(screen.getByRole('heading', { name: 'Discussion time' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Abort game' })).toBeInTheDocument()
+    expect(gameStore.getState().isDiscussionTimerRunning).toBe(true)
+    gameStore.getState().beginVoting()
+    expect(screen.getByRole('button', { name: 'Abort game' })).toBeInTheDocument()
+    gameStore.getState().showVote()
+    gameStore.getState().castVote('player-2')
+    await user.click(screen.getByRole('button', { name: 'Abort game' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.getByRole('heading', { name: 'Who should be voted out?' })).toBeInTheDocument()
+    expect(gameStore.getState().pendingVote).toEqual(['player-2'])
+    expect(gameStore.getState().isDiscussionTimerRunning).toBe(true)
+  })
+
+  it('keeps the abort control available during Outlier guessing', () => {
+    gameStore.getState().createSession('Special Crew')
+    gameStore.getState().startGame({
+      ...setup,
+      playerNames: ['Alex', 'Blair', 'Casey', 'Devon'],
+      outlierEnabled: true,
+    })
+    gameStore.getState().confirmRole(); gameStore.getState().confirmRole(); gameStore.getState().confirmRole(); gameStore.getState().confirmRole()
+    gameStore.getState().beginVoting()
+    for (const [index, voterId] of ['player-1', 'player-2', 'player-3', 'player-4'].entries()) {
+      gameStore.getState().showVote()
+      gameStore.getState().castVote(voterId === 'player-2' ? 'player-1' : 'player-2')
+      gameStore.getState().confirmVote()
+      if (index < 3) expect(gameStore.getState().game?.phase).toBe('VOTING')
+    }
+
+    render(<App />)
+
+    expect(screen.getByRole('heading', { name: /Pass to/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Abort game' })).toBeInTheDocument()
   })
 
   it('locks player names when a saved session continues to setup', async () => {

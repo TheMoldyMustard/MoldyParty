@@ -239,6 +239,10 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
 .session-card span, .session-card small { color: #ad97b4; }
 .session-actions { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1.2rem; }
 .button--danger { color: white; background: #8f342f; }
+.abort-game-trigger { position: fixed; top: calc(env(safe-area-inset-top) + .75rem); left: calc(env(safe-area-inset-left) + .75rem); z-index: 20; }
+@media (max-width: 600px) {
+  .abort-game-trigger { padding: .65rem .8rem; font-size: .78rem; }
+}
 .button:disabled { opacity: .45; cursor: not-allowed; }
 .session-create { display: grid; gap: 1rem; margin-top: 1.2rem; padding: 1.2rem; border: 1px solid rgb(199 243 107 / 24%); border-radius: 1rem; background: rgb(199 243 107 / 7%); }
 .session-create label { display: grid; gap: .45rem; color: #d8cadc; font-weight: 850; }
