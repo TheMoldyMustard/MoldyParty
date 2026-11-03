@@ -151,7 +151,7 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
 .player-input input { width: 100%; min-height: 3rem; border: 0; color: white; background: transparent; font-weight: 750; }
 .player-input input::placeholder { color: #806b89; }
 .category-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 1fr; align-items: stretch; gap: .75rem; }
-.category-option { position: relative; display: grid; min-height: 8.5rem; height: 100%; align-content: center; gap: .35rem; padding: 1rem; border: 1px solid rgb(255 255 255 / 12%); border-radius: 1.15rem; background: #24112f; cursor: pointer; }
+.category-option { position: relative; display: grid; min-width: 0; min-height: 0; aspect-ratio: 1; align-content: center; gap: .35rem; padding: 1rem; border: 1px solid rgb(255 255 255 / 12%); border-radius: 1.15rem; background: #24112f; cursor: pointer; }
 .category-option input { position: absolute; opacity: 0; }
 .category-option--selected { border-color: var(--lime); box-shadow: inset 0 0 0 1px var(--lime); background: #30401f; }
 .category-icon { color: var(--lime); font-size: 1.55rem; }
