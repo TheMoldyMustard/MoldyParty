@@ -51,10 +51,10 @@ export default function AbortGameDialog({ onConfirm }: AbortGameDialogProps) {
 
   return <>
     <button ref={triggerRef} className="abort-game-trigger button button--danger" type="button" onClick={() => setIsOpen(true)}>Abort game</button>
-    {isOpen && <dialog ref={dialogRef} className="session-dialog" aria-labelledby="abort-game-title" onCancel={(event) => { event.preventDefault(); setIsOpen(false) }}>
+    {isOpen && <dialog ref={dialogRef} className="session-dialog" aria-labelledby="abort-game-title" aria-describedby="abort-game-description" onCancel={(event) => { event.preventDefault(); setIsOpen(false) }}>
       <span className="eyebrow">Discard unfinished round</span>
       <h2 id="abort-game-title">Abort this game?</h2>
-      <p>This clears the current round. Completed session stats stay unchanged.</p>
+      <p id="abort-game-description">This clears the current round. Completed session stats stay unchanged.</p>
       <div className="button-row">
         <button className="button button--danger" type="button" onClick={() => { onConfirm(); setIsOpen(false) }}>Abort game</button>
         <button ref={cancelRef} className="button button--secondary" type="button" onClick={() => setIsOpen(false)}>Cancel</button>

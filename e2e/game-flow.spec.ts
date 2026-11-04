@@ -151,51 +151,65 @@ test('special roles guess privately and every role is revealed', async ({ page }
   await expect(page.getByRole('list', { name: 'Player roles' }).getByRole('listitem')).toHaveCount(5)
 })
 
-test('saved session can be continued, inspected, and deleted locally', async ({ page }) => {
+test('saved session can be continued, inspected, and deleted locally', async ({ page }, testInfo) => {
+  const statsPlayers = ['Alex', 'Blair', 'Casey']
   await openNewSession(page, 'Stats Crew')
-  for (const [index, name] of ['Alex', 'Blair', 'Casey'].entries()) {
+  for (const [index, name] of statsPlayers.entries()) {
     await page.getByLabel(`Player ${index + 1} name`).fill(name)
   }
   await page.getByLabel('Group Vote').check()
   await page.getByRole('button', { name: 'Start secret round' }).click()
-  await holdReveal(page, 'Alex')
-  await holdReveal(page, 'Blair')
-  await holdReveal(page, 'Casey')
+  for (const player of statsPlayers) await holdReveal(page, player)
   await page.getByRole('button', { name: 'Proceed to voting' }).click()
   await page.getByRole('group', { name: 'Vote for up to 1 player' }).getByRole('button', { name: 'Blair' }).click()
   await page.getByRole('button', { name: 'Decide the vote' }).click()
 
   let statsTable = page.getByRole('table', { name: 'Stats Crew session stats' })
-  await expect(statsTable).toContainText('Alex')
-  for (const player of ['Alex', 'Blair', 'Casey']) {
+  await expect(statsTable).toContainText(statsPlayers[0])
+  for (const player of statsPlayers) {
     const cells = statsTable.getByRole('row', { name: new RegExp(`^${player}`) }).getByRole('cell')
     for (const counterIndex of [3, 4, 5, 6, 7]) await expect(cells.nth(counterIndex)).toHaveText('0')
+  }
+  if (testInfo.project.name === 'mobile-chromium') {
+    await statsTable.locator('tbody th').first().evaluate((element) => {
+      element.textContent = 'WWWWWWWWWWWWWWWWWWWWWWWWWWWWWW'
+    })
+    const statsContainer = statsTable.locator('..')
+    const widths = await statsContainer.evaluate((element) => ({
+      client: element.clientWidth,
+      scroll: element.scrollWidth,
+    }))
+    const pageWidths = await page.evaluate(() => ({
+      document: document.documentElement.scrollWidth,
+      viewport: window.innerWidth,
+    }))
+    expect(widths.client).toBeLessThanOrEqual(pageWidths.viewport)
+    expect(widths.scroll).toBeLessThanOrEqual(widths.client)
+    expect(pageWidths.document).toBeLessThanOrEqual(pageWidths.viewport)
   }
 
   await page.reload()
   await expect(page.getByRole('heading', { name: /was voted out|Nobody was voted out/ })).toBeVisible()
-  await expect(page.getByRole('table', { name: 'Stats Crew session stats' }).getByRole('row', { name: /^Alex/ }).getByRole('cell').nth(0)).toHaveText('1')
+  await expect(page.getByRole('table', { name: 'Stats Crew session stats' }).getByRole('row', { name: new RegExp(`^${statsPlayers[0]}`) }).getByRole('cell').nth(0)).toHaveText('1')
 
   await page.getByRole('button', { name: 'Play again' }).click()
-  await holdReveal(page, 'Alex')
-  await holdReveal(page, 'Blair')
-  await holdReveal(page, 'Casey')
+  for (const player of statsPlayers) await holdReveal(page, player)
   await page.getByRole('button', { name: 'Proceed to voting' }).click()
   await page.getByRole('group', { name: 'Vote for up to 1 player' }).getByRole('button', { name: 'Blair' }).click()
   await page.getByRole('button', { name: 'Decide the vote' }).click()
   statsTable = page.getByRole('table', { name: 'Stats Crew session stats' })
-  await expect(statsTable.getByRole('row', { name: /^Alex/ }).getByRole('cell').nth(0)).toHaveText('2')
+  await expect(statsTable.getByRole('row', { name: new RegExp(`^${statsPlayers[0]}`) }).getByRole('cell').nth(0)).toHaveText('2')
 
   await page.getByRole('button', { name: 'Return to lobby' }).click()
   await expect(page.getByRole('heading', { name: 'Impostor sessions' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Continue a session' }).click()
-  await expect(page.getByLabel('Player 1 name')).toHaveValue('Alex')
+  await expect(page.getByLabel('Player 1 name')).toHaveValue(statsPlayers[0])
   await page.getByRole('button', { name: '← MoldyParty' }).click()
 
   await page.getByRole('button', { name: 'View session stats' }).click()
   await expect(page.getByRole('heading', { name: 'Stats Crew stats' })).toBeVisible()
-  await expect(page.getByRole('table', { name: 'Stats Crew session stats' }).getByRole('row', { name: /^Alex/ }).getByRole('cell').nth(0)).toHaveText('2')
+  await expect(page.getByRole('table', { name: 'Stats Crew session stats' }).getByRole('row', { name: new RegExp(`^${statsPlayers[0]}`) }).getByRole('cell').nth(0)).toHaveText('2')
   await page.getByRole('button', { name: '← Sessions' }).click()
 
   await page.getByRole('button', { name: 'Create new session' }).click()
@@ -222,7 +236,7 @@ test('saved session can be continued, inspected, and deleted locally', async ({ 
   await expect(page.getByRole('button', { name: 'Stats Crew' })).toHaveCount(0)
 })
 
-test('can abort an unfinished game without counting it', async ({ page }) => {
+test('can abort an unfinished game without counting it', async ({ page }, testInfo) => {
   await openNewSession(page, 'Abort Crew')
   for (const [index, name] of ['Alex', 'Blair', 'Casey'].entries()) {
     await page.getByLabel(`Player ${index + 1} name`).fill(name)
@@ -231,8 +245,37 @@ test('can abort an unfinished game without counting it', async ({ page }) => {
 
   await expect(page.getByRole('heading', { name: 'Pass to Alex' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Abort game' })).toBeVisible()
+  if (testInfo.project.name === 'mobile-chromium') {
+    await page.setViewportSize({ width: 844, height: 390 })
+    const abortBox = await page.getByRole('button', { name: 'Abort game' }).boundingBox()
+    const headingBox = await page.getByRole('heading', { name: 'Pass to Alex' }).boundingBox()
+    expect(abortBox).not.toBeNull()
+    expect(headingBox).not.toBeNull()
+    expect(abortBox!.x).toBeGreaterThanOrEqual(0)
+    expect(abortBox!.y).toBeGreaterThanOrEqual(0)
+    expect(abortBox!.x + abortBox!.width).toBeLessThanOrEqual(844)
+    expect(abortBox!.y + abortBox!.height).toBeLessThanOrEqual(390)
+    const overlapsHeading = !(
+      abortBox!.x + abortBox!.width <= headingBox!.x
+      || headingBox!.x + headingBox!.width <= abortBox!.x
+      || abortBox!.y + abortBox!.height <= headingBox!.y
+      || headingBox!.y + headingBox!.height <= abortBox!.y
+    )
+    expect(overlapsHeading).toBe(false)
+  }
   await page.getByRole('button', { name: 'Abort game' }).click()
-  await expect(page.getByRole('dialog')).toContainText('Completed session stats stay unchanged')
+  const abortDialog = page.getByRole('dialog')
+  await expect(abortDialog).toContainText('Completed session stats stay unchanged')
+  const dialogBox = await abortDialog.boundingBox()
+  const viewport = page.viewportSize()
+  expect(dialogBox).not.toBeNull()
+  expect(viewport).not.toBeNull()
+  expect(dialogBox!.x).toBeGreaterThanOrEqual(0)
+  expect(dialogBox!.y).toBeGreaterThanOrEqual(0)
+  expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(viewport!.width)
+  expect(dialogBox!.y + dialogBox!.height).toBeLessThanOrEqual(viewport!.height)
+  expect(Math.abs(dialogBox!.x + dialogBox!.width / 2 - viewport!.width / 2)).toBeLessThanOrEqual(2)
+  expect(Math.abs(dialogBox!.y + dialogBox!.height / 2 - viewport!.height / 2)).toBeLessThanOrEqual(2)
   await page.getByRole('button', { name: 'Cancel' }).click()
   await expect(page.getByRole('heading', { name: 'Pass to Alex' })).toBeVisible()
 

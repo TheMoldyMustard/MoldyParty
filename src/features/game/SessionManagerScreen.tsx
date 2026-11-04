@@ -98,9 +98,11 @@ export default function SessionManagerScreen({ onBack, onCreate, onContinue }: S
 
     <div className="session-actions" aria-label="Session actions">
       <button className="button button--hero" type="button" onClick={() => setIsCreating(true)}>Create new session</button>
-      <button className="button button--secondary" type="button" disabled={!selected} onClick={() => selected && onContinue(selected.id)}>Continue a session</button>
-      <button className="button button--secondary" type="button" disabled={!selected} onClick={() => selected && setStatsSessionId(selected.id)}>View session stats</button>
-      <button ref={deleteButtonRef} className="button button--danger" type="button" disabled={!selected} onClick={() => selected && setDeleteSessionId(selected.id)}>Delete session</button>
+      {selected && <>
+        <button className="button button--secondary" type="button" onClick={() => onContinue(selected.id)}>Continue a session</button>
+        <button className="button button--secondary" type="button" onClick={() => setStatsSessionId(selected.id)}>View session stats</button>
+        <button ref={deleteButtonRef} className="button button--danger" type="button" onClick={() => setDeleteSessionId(selected.id)}>Delete session</button>
+      </>}
     </div>
 
     {isCreating && <form className="session-create" onSubmit={submitNewSession}>
@@ -108,10 +110,10 @@ export default function SessionManagerScreen({ onBack, onCreate, onContinue }: S
       <div className="button-row"><button className="button button--hero" type="submit">Set up session</button><button className="button button--secondary" type="button" onClick={() => setIsCreating(false)}>Cancel</button></div>
     </form>}
 
-    {pendingDelete && <dialog ref={deleteDialogRef} className="session-dialog" aria-labelledby="delete-session-title" onCancel={(event) => { event.preventDefault(); setDeleteSessionId(null) }}>
+    {pendingDelete && <dialog ref={deleteDialogRef} className="session-dialog" aria-labelledby="delete-session-title" aria-describedby="delete-session-description" onCancel={(event) => { event.preventDefault(); setDeleteSessionId(null) }}>
       <span className="eyebrow">Delete local data</span>
       <h2 id="delete-session-title">Delete {pendingDelete.name}?</h2>
-      <p>This permanently removes its stats and any unfinished round from this browser.</p>
+      <p id="delete-session-description">This permanently removes its stats and any unfinished round from this browser.</p>
       <div className="button-row"><button className="button button--danger" type="button" onClick={() => { deleteSession(pendingDelete.id); setDeleteSessionId(null); setSelectedId(null) }}>Delete {pendingDelete.name}</button><button ref={cancelDeleteRef} className="button button--secondary" type="button" onClick={() => setDeleteSessionId(null)}>Cancel</button></div>
     </dialog>}
   </main>

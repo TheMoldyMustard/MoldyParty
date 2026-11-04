@@ -43,16 +43,16 @@ describe('MoldyParty app shell', () => {
     expect(screen.queryByText('Pass it. Bluff it. Find them.')).not.toBeInTheDocument()
   })
 
-  it('opens the four session actions from Impostor', async () => {
+  it('shows only the useful session action when no sessions exist', async () => {
     const user = userEvent.setup()
     render(<App />)
 
     await user.click(screen.getByRole('button', { name: /open impostor/i }))
 
     expect(screen.getByRole('button', { name: 'Create new session' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Continue a session' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'View session stats' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Delete session' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Continue a session' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'View session stats' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Delete session' })).not.toBeInTheDocument()
   })
 
   it('names a new session before opening round setup', async () => {
@@ -106,7 +106,9 @@ describe('MoldyParty app shell', () => {
 
     expect(screen.getByRole('button', { name: 'Abort game' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Abort game' }))
-    expect(screen.getByRole('dialog')).toHaveTextContent('Abort this game?')
+    const abortDialog = screen.getByRole('dialog')
+    expect(abortDialog).toHaveTextContent('Abort this game?')
+    expect(abortDialog).toHaveAccessibleDescription('This clears the current round. Completed session stats stay unchanged.')
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.getByRole('heading', { name: 'Pass to Alex' })).toBeInTheDocument()
 
@@ -231,7 +233,9 @@ describe('MoldyParty app shell', () => {
     const deleteButton = screen.getByRole('button', { name: 'Delete session' })
     await user.click(deleteButton)
 
-    expect(screen.getByRole('dialog')).toHaveTextContent('Friday Crew')
+    const deleteDialog = screen.getByRole('dialog')
+    expect(deleteDialog).toHaveTextContent('Friday Crew')
+    expect(deleteDialog).toHaveAccessibleDescription('This permanently removes its stats and any unfinished round from this browser.')
     expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus()
     expect(gameStore.getState().sessionsById).not.toEqual({})
     await user.keyboard('{Escape}')

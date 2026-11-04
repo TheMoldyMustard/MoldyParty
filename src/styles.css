@@ -247,7 +247,7 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
 .session-create { display: grid; gap: 1rem; margin-top: 1.2rem; padding: 1.2rem; border: 1px solid rgb(199 243 107 / 24%); border-radius: 1rem; background: rgb(199 243 107 / 7%); }
 .session-create label { display: grid; gap: .45rem; color: #d8cadc; font-weight: 850; }
 .session-create input { min-height: 3.5rem; border: 1px solid rgb(255 255 255 / 18%); border-radius: .8rem; padding: .7rem .9rem; color: white; background: #24112f; }
-.session-dialog { width: min(calc(100% - 2rem), 30rem); gap: 1rem; padding: 1.5rem; border: 1px solid rgb(255 255 255 / 18%); border-radius: 1.25rem; color: inherit; background: #24112f; box-shadow: 0 2rem 5rem rgb(0 0 0 / 45%); }
+.session-dialog { position: fixed; inset: 0; width: min(calc(100% - 2rem), 30rem); max-height: calc(100dvh - 2rem); margin: auto; gap: 1rem; overflow-y: auto; padding: 1.5rem; border: 1px solid rgb(255 255 255 / 18%); border-radius: 1.25rem; color: inherit; background: #24112f; box-shadow: 0 2rem 5rem rgb(0 0 0 / 45%); }
 .session-dialog[open] { display: grid; }
 .session-dialog::backdrop { background: rgb(10 4 14 / 75%); }
 .session-dialog h2 { font-size: 1.8rem; }
@@ -303,6 +303,18 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
   .rule-group, .reveal-summary { grid-template-columns: 1fr; }
   .role-roster { grid-template-columns: 1fr; }
   .session-list { grid-template-columns: 1fr; }
+  .session-stats-wrap { min-width: 0; max-width: 100%; overflow: visible; border: 0; background: transparent; }
+  .session-stats { width: 100%; min-width: 0; max-width: 100%; display: block; }
+  .session-stats thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  .session-stats tbody { min-width: 0; display: grid; gap: .8rem; }
+  .session-stats tr { min-width: 0; max-width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); padding: 1rem; border: 1px solid rgb(255 255 255 / 13%); border-radius: 1rem; background: rgb(255 255 255 / 5%); }
+  .session-stats th, .session-stats td { min-width: 0; max-width: 100%; padding: .65rem 0; border-bottom: 1px solid rgb(255 255 255 / 9%); }
+  .session-stats tbody th { padding-top: 0; overflow-wrap: anywhere; word-break: break-word; font-size: 1.2rem; }
+  .session-stats td { display: grid; grid-template-columns: minmax(8rem, .9fr) minmax(0, 1.1fr); gap: 1rem; text-align: right; }
+  .session-stats td::before { content: attr(data-label); color: var(--lime); font-size: .72rem; font-weight: 900; letter-spacing: .04em; text-align: left; text-transform: uppercase; }
+  .session-stats td:last-child { padding-bottom: 0; border-bottom: 0; }
+  .session-stats .role-stat-list { min-width: 0; text-align: left; }
+  .session-stats-note { padding-inline: 0; }
   .word-row { grid-template-columns: 1fr; }
   .ai-helper { grid-template-columns: 1fr; align-items: stretch; }
   .copy-status { position: static; }
