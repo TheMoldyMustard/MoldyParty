@@ -1,6 +1,12 @@
 export interface ScreenOrientationLike {
   lock?(orientation: 'landscape'): Promise<void>
   unlock?(): void
+  angle?: number
+}
+
+export function getOrientationAngle(orientation: ScreenOrientationLike | undefined): number {
+  const angle = orientation?.angle
+  return typeof angle === 'number' && Number.isFinite(angle) ? angle : 0
 }
 
 export async function lockLandscape(orientation: ScreenOrientationLike | undefined): Promise<boolean> {

@@ -3,7 +3,7 @@ import type { CharadesOutcome } from '../../domain/charades'
 import { createAudioSynth, type AudioCue, type AudioSynth } from './audioSynth'
 import { vibrateForOutcome, type VibrationNavigatorLike } from './haptics'
 import { createOrientationRecognizer, type OrientationRecognizer } from './orientationInput'
-import { lockLandscape as requestLandscape, unlockOrientation as releaseOrientation } from './orientationLock'
+import { getOrientationAngle, lockLandscape as requestLandscape, unlockOrientation as releaseOrientation } from './orientationLock'
 import { requestOrientationPermission as requestBrowserOrientation, type OrientationConstructorLike, type OrientationPermissionStatus } from './orientationPermission'
 import { createWakeLockManager, type WakeLockManager, type WakeLockLike } from './wakeLock'
 
@@ -162,7 +162,7 @@ function browserDependencies(
   onOutcome: (outcome: CharadesOutcome) => boolean,
   onStatus?: (status: CharadesDeviceStatus) => void,
 ): CharadesDeviceControllerDependencies {
-  const orientation = screen.orientation as unknown as { lock?: (value: 'landscape') => Promise<void>; unlock?: () => void; angle?: number }
+  const orientation = screen.orientation as unknown as { lock?: (value: 'landscape') => Promise<void>; unlock?: () => void; angle?: number } | undefined
   const wakeLock = createWakeLockManager(
     (navigator as Navigator & { wakeLock?: WakeLockLike }).wakeLock,
     () => document.visibilityState === 'visible',
@@ -172,7 +172,7 @@ function browserDependencies(
     windowTarget: window,
     documentTarget: document,
     requestPermission: () => requestBrowserOrientation(orientationConstructor),
-    getAngle: () => orientation.angle ?? 0,
+    getAngle: () => getOrientationAngle(orientation),
     now: () => performance.now(),
     wakeLock,
     lockLandscape: () => requestLandscape(orientation),

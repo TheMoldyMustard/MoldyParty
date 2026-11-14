@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { vibrateForOutcome } from './haptics'
-import { lockLandscape, unlockOrientation } from './orientationLock'
+import { getOrientationAngle, lockLandscape, unlockOrientation } from './orientationLock'
 import { requestOrientationPermission } from './orientationPermission'
 import { createWakeLockManager } from './wakeLock'
 
@@ -43,6 +43,11 @@ describe('wake lock manager', () => {
 })
 
 describe('orientation and haptic feedback fallbacks', () => {
+  it('uses a zero angle when screen orientation is unavailable', () => {
+    expect(getOrientationAngle(undefined)).toBe(0)
+    expect(getOrientationAngle({ angle: 270 })).toBe(270)
+  })
+
   it('treats orientation locking as advisory and always allows unlock cleanup', async () => {
     const orientation = { lock: vi.fn().mockRejectedValue(new Error('Unsupported')), unlock: vi.fn() }
     expect(await lockLandscape(orientation)).toBe(false)
