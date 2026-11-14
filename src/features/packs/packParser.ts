@@ -1,10 +1,13 @@
-import type { WordItem, WordPack } from '../../domain/types'
+import type { CharadesCategory, CharadesVibe, WordItem, WordPack } from '../../domain/types'
 
 export type ParseResult =
   | { ok: true; pack: WordPack }
   | { ok: false; error: string }
 
 type UnknownRecord = Record<string, unknown>
+
+const CHARADES_CATEGORIES: CharadesCategory[] = ['person', 'place', 'object', 'animal', 'food', 'pop-culture', 'other']
+const CHARADES_VIBES: CharadesVibe[] = ['casual', 'pop-culture-local', 'chaos-hard']
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -16,13 +19,36 @@ function normalizeItems(value: unknown): WordItem[] | string {
   }
 
   const items: WordItem[] = []
-  for (const candidate of value) {
+  for (const [index, candidate] of value.entries()) {
     if (!isRecord(candidate) || typeof candidate.word !== 'string') {
-      return 'Each item needs a word and hint.'
+      return `Item ${index + 1} needs a word.`
     }
     const word = candidate.word.trim()
     if (!word) {
       return 'Words cannot be blank.'
+    }
+
+    const item: WordItem = { word }
+    if ('category' in candidate) {
+      if (typeof candidate.category !== 'string' || !CHARADES_CATEGORIES.includes(candidate.category as CharadesCategory)) {
+        return `Item ${index + 1} has an unknown Charades category.`
+      }
+      item.category = candidate.category as CharadesCategory
+    }
+    if ('vibes' in candidate) {
+      if (
+        !Array.isArray(candidate.vibes)
+        || candidate.vibes.some((vibe) => typeof vibe !== 'string' || !CHARADES_VIBES.includes(vibe as CharadesVibe))
+      ) {
+        return `Item ${index + 1} has an unknown Charades vibe.`
+      }
+      item.vibes = [...new Set(candidate.vibes as CharadesVibe[])]
+    }
+    if ('charadesOnly' in candidate) {
+      if (typeof candidate.charadesOnly !== 'boolean') {
+        return `Item ${index + 1} has an invalid charadesOnly flag.`
+      }
+      item.charadesOnly = candidate.charadesOnly
     }
 
     if ('hints' in candidate) {
@@ -33,14 +59,15 @@ function normalizeItems(value: unknown): WordItem[] | string {
         return 'All hints must be non-empty strings.'
       }
       const hints = candidate.hints.map((hint) => (hint as string).trim())
-      items.push({ word, hint: hints[0], hints })
-      continue
+      item.hint = hints[0]
+      item.hints = hints
+    } else if ('hint' in candidate) {
+      if (typeof candidate.hint !== 'string' || !candidate.hint.trim()) {
+        return `Item ${index + 1} has an invalid hint.`
+      }
+      item.hint = candidate.hint.trim()
     }
-
-    if (typeof candidate.hint !== 'string') {
-      return 'Each item needs a word and hint.'
-    }
-    items.push({ word, hint: candidate.hint.trim() })
+    items.push(item)
   }
 
   const normalizedWords = items.map((item) => item.word.toLocaleLowerCase())
@@ -117,8 +144,12 @@ export function serializeWordPack(pack: WordPack): string {
   return JSON.stringify({
     packName: pack.packName,
     category: pack.category,
-    items: pack.items.map((item) => item.hints?.length
-      ? { word: item.word, hints: item.hints }
-      : { word: item.word, hint: item.hint }),
+    items: pack.items.map((item) => ({
+      word: item.word,
+      ...(item.hints?.length ? { hints: item.hints } : item.hint ? { hint: item.hint } : {}),
+      ...(item.charadesOnly !== undefined ? { charadesOnly: item.charadesOnly } : {}),
+      ...(item.category ? { category: item.category } : {}),
+      ...(item.vibes ? { vibes: item.vibes } : {}),
+    })),
   }, null, 2)
 }

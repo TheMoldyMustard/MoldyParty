@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import type { WordItem, WordPack } from '../../domain/types'
+import type { CharadesCategory, CharadesVibe, WordItem, WordPack } from '../../domain/types'
+import { eligibleItems } from '../../domain/packCompatibility'
 import { packRepository, type PackRepository } from './packDb'
 import { parseWordPackJson, serializeWordPack } from './packParser'
 import { parseManualHints } from './manualHints'
@@ -19,9 +20,12 @@ export default function PackManager({
   onPacksChanged,
   onImported,
 }: PackManagerProps) {
-  const [mode, setMode] = useState<'manual' | 'import'>('manual')
+  const [mode, setMode] = useState<'manual' | 'bulk' | 'import'>('manual')
   const [packName, setPackName] = useState('')
   const [items, setItems] = useState<WordItem[]>([emptyItem()])
+  const [bulkWords, setBulkWords] = useState('')
+  const [bulkCategory, setBulkCategory] = useState<CharadesCategory>('other')
+  const [bulkVibes, setBulkVibes] = useState<CharadesVibe[]>([])
   const [jsonText, setJsonText] = useState('')
   const [savedPacks, setSavedPacks] = useState<WordPack[]>([])
   const [message, setMessage] = useState('')
@@ -53,27 +57,30 @@ export default function PackManager({
   }
 
   async function saveManualPack() {
+    const existing = editingPackId ? savedPacks.find((pack) => pack.id === editingPackId) : undefined
     const normalizedItems = items
       .map((item) => {
-        const hints = parseManualHints(item.hint)
+        const hints = parseManualHints(item.hint ?? '')
         const hint = hints[0] ?? ''
         return {
           word: item.word.trim(),
-          hint,
+          ...(hint ? { hint } : {}),
           ...(hints.length > 1 ? { hints } : {}),
+          ...(item.charadesOnly === true ? { charadesOnly: true } : {}),
+          ...(item.category ? { category: item.category } : {}),
+          ...(item.vibes ? { vibes: item.vibes } : {}),
         }
       })
       .filter((item) => item.word)
     const result = parseWordPackJson(JSON.stringify({
       packName,
-      category: 'Custom',
+      category: existing?.category ?? 'Custom',
       items: normalizedItems,
     }))
     if (!result.ok) {
       setMessage(result.error)
       return
     }
-    const existing = editingPackId ? savedPacks.find((pack) => pack.id === editingPackId) : undefined
     await repository.put(existing ? {
       ...result.pack,
       id: existing.id,
@@ -85,6 +92,37 @@ export default function PackManager({
     setPackName('')
     setItems([emptyItem()])
     await refresh()
+  }
+
+  async function saveBulkPack() {
+    const words = bulkWords.split(/\r?\n/).map((word) => word.trim()).filter(Boolean)
+    const result = parseWordPackJson(JSON.stringify({
+      packName,
+      category: 'Mixed',
+      items: words.map((word) => ({
+        word,
+        charadesOnly: true,
+        category: bulkCategory,
+        vibes: bulkVibes,
+      })),
+    }))
+    if (!result.ok) {
+      setMessage(result.error)
+      setMessageKind('alert')
+      return
+    }
+    await repository.put(result.pack)
+    setMessage('Charades pack saved on this device.')
+    setMessageKind('status')
+    setPackName('')
+    setBulkWords('')
+    await refresh()
+  }
+
+  function toggleBulkVibe(vibe: CharadesVibe) {
+    setBulkVibes((current) => current.includes(vibe)
+      ? current.filter((candidate) => candidate !== vibe)
+      : [...current, vibe])
   }
 
   async function importPack() {
@@ -151,6 +189,7 @@ export default function PackManager({
 
       <div className="tabs" role="tablist" aria-label="Custom pack input method">
         <button role="tab" aria-selected={mode === 'manual'} onClick={() => setMode('manual')}>Manual entry</button>
+        <button role="tab" aria-selected={mode === 'bulk'} onClick={() => setMode('bulk')}>Charades bulk</button>
         <button role="tab" aria-selected={mode === 'import'} onClick={() => setMode('import')}>Import JSON</button>
       </div>
 
@@ -167,7 +206,7 @@ export default function PackManager({
           {items.map((item, index) => (
             <div className="word-row" key={index}>
               <label>Word {index + 1}<input value={item.word} onChange={(event) => updateItem(index, 'word', event.target.value)} /></label>
-              <label>Hints {index + 1}<input aria-label={`Hint ${index + 1}`} placeholder="Creation, Journey, Night" value={item.hint} onChange={(event) => updateItem(index, 'hint', event.target.value)} /></label>
+              <label>Hints {index + 1}<input aria-label={`Hint ${index + 1}`} placeholder="Creation, Journey, Night" value={item.hint ?? ''} onChange={(event) => updateItem(index, 'hint', event.target.value)} /></label>
               {items.length > 1 && <button className="icon-button" aria-label={`Remove word ${index + 1}`} onClick={() => setItems((current) => current.filter((_, itemIndex) => itemIndex !== index))}>×</button>}
             </div>
           ))}
@@ -176,6 +215,27 @@ export default function PackManager({
             {editingPackId && <button className="text-button" type="button" onClick={() => { setEditingPackId(null); setPackName(''); setItems([emptyItem()]) }}>Cancel edit</button>}
             <button className="button" onClick={() => void saveManualPack()}>{editingPackId ? 'Update pack' : 'Save pack'}</button>
           </div>
+        </div>
+      ) : mode === 'bulk' ? (
+        <div className="stack">
+          <label>Charades pack name<input value={packName} onChange={(event) => setPackName(event.target.value)} /></label>
+          <label>Words (one per line)<textarea rows={10} value={bulkWords} onChange={(event) => setBulkWords(event.target.value)} /></label>
+          <span className="muted">{bulkWords.split(/\r?\n/).filter((word) => word.trim()).length} words</span>
+          <label>Default category<select value={bulkCategory} onChange={(event) => setBulkCategory(event.target.value as CharadesCategory)}>
+            <option value="person">Person / Tao</option>
+            <option value="place">Place / Lugar</option>
+            <option value="object">Object / Bagay</option>
+            <option value="animal">Animal / Hayop</option>
+            <option value="food">Food / Pagkain</option>
+            <option value="pop-culture">Pop Culture</option>
+            <option value="other">Other / Iba</option>
+          </select></label>
+          <fieldset className="rule-group"><legend>Default vibes</legend>
+            <label><input type="checkbox" checked={bulkVibes.includes('casual')} onChange={() => toggleBulkVibe('casual')} /> Casual</label>
+            <label><input type="checkbox" checked={bulkVibes.includes('pop-culture-local')} onChange={() => toggleBulkVibe('pop-culture-local')} /> Pop Culture / Local</label>
+            <label><input type="checkbox" checked={bulkVibes.includes('chaos-hard')} onChange={() => toggleBulkVibe('chaos-hard')} /> Chaos / Hard</label>
+          </fieldset>
+          <button className="button" type="button" onClick={() => void saveBulkPack()}>Save Charades pack</button>
         </div>
       ) : (
         <div className="stack">
@@ -193,7 +253,7 @@ export default function PackManager({
         <h3>Saved on this device</h3>
         {savedPacks.length === 0 ? <p className="muted">No custom packs yet.</p> : savedPacks.map((pack) => (
           <article className="saved-pack" key={pack.id}>
-            <div><strong>{pack.packName}</strong><span>{pack.items.length} words</span></div>
+            <div><strong>{pack.packName}</strong><span>Impostor {eligibleItems(pack, 'impostor').length} · Charades {eligibleItems(pack, 'charades').length}</span></div>
             <details><summary>Preview</summary><p>{pack.items.map((item) => item.word).join(' · ')}</p></details>
             <div className="button-row button-row--compact">
               <button aria-label={`Edit ${pack.packName}`} onClick={() => editPack(pack)}>Edit</button>

@@ -1,11 +1,12 @@
 import 'fake-indexeddb/auto'
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from '../../App'
 import { createRound } from '../../domain/game'
 import type { GameSetupInput } from '../../domain/types'
 import { gameStore } from '../../store/gameStore'
+import { packRepository } from '../packs/packDb'
 
 async function openConfiguredLobby() {
   const user = userEvent.setup()
@@ -71,6 +72,23 @@ describe('Impostor game interface', () => {
     expect(screen.getByLabelText('Player 1 name')).toHaveValue('Alex')
     expect(screen.getByLabelText('Player 2 name')).toHaveValue('Blair')
     expect(screen.getByLabelText('Player 3 name')).toHaveValue('Casey')
+  })
+
+  it('does not offer a word-only custom pack in Impostor setup', async () => {
+    await packRepository.put({
+      id: 'charades-only-test-pack',
+      packName: 'Charades Only Test',
+      category: 'Custom',
+      source: 'custom',
+      items: [{ word: 'Balut', charadesOnly: true }],
+    })
+
+    await openConfiguredLobby()
+
+    await waitFor(() => {
+      expect(screen.queryByRole('radio', { name: /Charades Only Test/i })).not.toBeInTheDocument()
+    })
+    await packRepository.delete('charades-only-test-pack')
   })
 
   it('offers optional Jester and Outlier roles with Outlier hints off by default', async () => {

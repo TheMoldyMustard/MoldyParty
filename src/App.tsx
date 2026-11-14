@@ -11,13 +11,18 @@ import SessionManagerScreen from './features/game/SessionManagerScreen'
 import VotingScreen from './features/game/VotingScreen'
 import PackManager from './features/packs/PackManager'
 import { gameStore, useGameStore } from './store/gameStore'
+import CharadesGame from './features/charades/CharadesGame'
+import CharadesSetupScreen from './features/charades/CharadesSetupScreen'
+import { appStore, resolveActiveGame, useAppStore } from './store/appStore'
+import { useCharadesStore } from './store/charadesStore'
 
-type AppView = 'home' | 'sessions' | 'lobby' | 'packs'
+type AppView = 'home' | 'sessions' | 'lobby' | 'packs' | 'charades' | 'charades-packs'
 
 function AppContent() {
   const [view, setView] = useState<AppView>('home')
   const [lobbyDraft, setLobbyDraft] = useState<LobbyDraft | null>(null)
   const [preferredPackId, setPreferredPackId] = useState<string | null>(null)
+  const [preferredCharadesPackId, setPreferredCharadesPackId] = useState<string | null>(null)
   const [lobbyNotice, setLobbyNotice] = useState('')
   const game = useGameStore((state) => state.game)
   const changeCategory = useGameStore((state) => state.changeCategory)
@@ -26,24 +31,29 @@ function AppContent() {
   const createSession = useGameStore((state) => state.createSession)
   const continueSession = useGameStore((state) => state.continueSession)
   const activeSessionId = useGameStore((state) => state.activeSessionId)
+  const charadesSession = useCharadesStore((state) => state.session)
+  const explicitActiveGame = useAppStore((state) => state.activeGameId)
+  const activeGame = resolveActiveGame(explicitActiveGame, game !== null, charadesSession !== null)
 
-  if (game?.phase === 'GAME_OVER') return <GameOverScreen
+  if (activeGame === 'charades' && charadesSession) return <CharadesGame onExit={() => setView('home')} />
+
+  if (activeGame === 'impostor' && game?.phase === 'GAME_OVER') return <GameOverScreen
     onChangeCategory={() => { changeCategory(); setView('sessions') }}
     onReturnToLobby={() => { returnToLobby(); setView('sessions') }}
   />
 
   let activeGameScreen: ReactNode = null
-  if (game?.phase === 'ROLE_REVEAL') activeGameScreen = <RoleRevealScreen key={game.currentRevealIndex} />
-  if (game?.phase === 'DISCUSSION') activeGameScreen = <DiscussionScreen />
-  if (game?.phase === 'VOTING') activeGameScreen = <VotingScreen />
-  if (game?.phase === 'OUTLIER_GUESS') activeGameScreen = <OutlierGuessScreen />
+  if (activeGame === 'impostor' && game?.phase === 'ROLE_REVEAL') activeGameScreen = <RoleRevealScreen key={game.currentRevealIndex} />
+  if (activeGame === 'impostor' && game?.phase === 'DISCUSSION') activeGameScreen = <DiscussionScreen />
+  if (activeGame === 'impostor' && game?.phase === 'VOTING') activeGameScreen = <VotingScreen />
+  if (activeGame === 'impostor' && game?.phase === 'OUTLIER_GUESS') activeGameScreen = <OutlierGuessScreen />
   if (activeGameScreen) return <>
     {activeGameScreen}
     <AbortGameDialog onConfirm={() => { abortGame(); setView('sessions') }} />
   </>
 
   if (view === 'sessions') return <SessionManagerScreen
-    onBack={() => setView('home')}
+    onBack={() => { appStore.getState().setActiveGame(null); setView('home') }}
     onCreate={(name) => { createSession(name); setLobbyDraft(null); setView('lobby') }}
     onContinue={(sessionId) => {
       continueSession(sessionId)
@@ -52,6 +62,8 @@ function AppContent() {
   />
   if (view === 'lobby') return <LobbyScreen draft={lobbyDraft} preferredPackId={preferredPackId} onPreferredPackApplied={() => setPreferredPackId(null)} notice={lobbyNotice} onDraftChange={setLobbyDraft} onBack={() => setView('sessions')} onManagePacks={() => setView('packs')} rosterLocked={activeSessionId !== null} />
   if (view === 'packs') return <main className="screen"><nav className="topbar"><button className="text-button" onClick={() => setView('lobby')}>← Back to setup</button></nav><PackManager onImported={(packId) => { setPreferredPackId(packId); setLobbyNotice('Pack imported and ready in your round.'); setView('lobby') }} /></main>
+  if (view === 'charades') return <CharadesSetupScreen preferredPackId={preferredCharadesPackId} onBack={() => { appStore.getState().setActiveGame(null); setView('home') }} onManagePacks={() => setView('charades-packs')} />
+  if (view === 'charades-packs') return <main className="screen"><nav className="topbar"><button className="text-button" onClick={() => setView('charades')}>← Back to Charades</button></nav><PackManager onImported={(packId) => { setPreferredCharadesPackId(packId); setView('charades') }} /></main>
 
   return (
     <main className="app-shell">
@@ -71,11 +83,21 @@ function AppContent() {
           <span className="pill">Launch game</span>
           <h2 id="impostor-title">Impostor</h2>
           <p>Find the impostors before they blend in.</p>
-          <button type="button" onClick={() => setView('sessions')}>Open Impostor <span aria-hidden="true">→</span></button>
+          <button type="button" onClick={() => { appStore.getState().setActiveGame('impostor'); setView('sessions') }}>Open Impostor <span aria-hidden="true">→</span></button>
         </div>
       </section>
 
-      <footer>Built for 3+ suspicious friends</footer>
+      <section className="game-card game-card--charades" aria-labelledby="charades-title">
+        <div className="game-card__art" aria-hidden="true"><span className="game-card__eye">↕</span></div>
+        <div className="game-card__content">
+          <span className="pill">New game</span>
+          <h2 id="charades-title">Forehead Charades</h2>
+          <p>Tilt, tap, guess, and pass through four party-ready modes.</p>
+          <button type="button" onClick={() => { appStore.getState().setActiveGame('charades'); setView('charades') }}>Open Forehead Charades <span aria-hidden="true">→</span></button>
+        </div>
+      </section>
+
+      <footer>Built for pass-the-device parties</footer>
     </main>
   )
 }

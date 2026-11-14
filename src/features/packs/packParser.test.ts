@@ -54,6 +54,27 @@ describe('parseWordPackJson', () => {
     })
   })
 
+  it('parses and preserves mixed Charades metadata without inventing hints', () => {
+    const result = parseWordPackJson(JSON.stringify({
+      packName: 'Pinoy Party',
+      category: 'Mixed',
+      items: [
+        { word: 'Adobo', hint: 'Ulam', category: 'food', vibes: ['casual', 'pop-culture-local'] },
+        { word: 'Balut', charadesOnly: true, category: 'food', vibes: ['chaos-hard'] },
+      ],
+    }))
+
+    expect(result).toEqual({
+      ok: true,
+      pack: expect.objectContaining({
+        items: [
+          { word: 'Adobo', hint: 'Ulam', category: 'food', vibes: ['casual', 'pop-culture-local'] },
+          { word: 'Balut', charadesOnly: true, category: 'food', vibes: ['chaos-hard'] },
+        ],
+      }),
+    })
+  })
+
   it.each([
     ['', 'Paste some JSON to continue.'],
     ['{oops', 'That is not valid JSON.'],
@@ -65,6 +86,12 @@ describe('parseWordPackJson', () => {
     [JSON.stringify({ packName: 'No Hints', category: 'Custom', items: [
       { word: 'Moon', hints: [] },
     ] }), 'Each hints array needs at least 1 hint.'],
+    [JSON.stringify({ packName: 'Bad Category', items: [
+      { word: 'Moon', category: 'planet' },
+    ] }), 'Item 1 has an unknown Charades category.'],
+    [JSON.stringify({ packName: 'Bad Vibe', items: [
+      { word: 'Moon', vibes: ['impossible'] },
+    ] }), 'Item 1 has an unknown Charades vibe.'],
   ])('rejects invalid input with a useful message', (text, message) => {
     expect(parseWordPackJson(text)).toEqual({ ok: false, error: message })
   })
@@ -99,5 +126,27 @@ describe('serializeWordPack', () => {
     }))
 
     expect(result.items).toEqual([{ word: 'Moon', hints }])
+  })
+
+  it('exports optional Charades metadata and omits an absent hint', () => {
+    const result = JSON.parse(serializeWordPack({
+      id: 'local-id',
+      packName: 'Pinoy Party',
+      category: 'Mixed',
+      source: 'custom',
+      items: [{
+        word: 'Balut',
+        charadesOnly: true,
+        category: 'food',
+        vibes: ['chaos-hard'],
+      }],
+    }))
+
+    expect(result.items).toEqual([{
+      word: 'Balut',
+      charadesOnly: true,
+      category: 'food',
+      vibes: ['chaos-hard'],
+    }])
   })
 })

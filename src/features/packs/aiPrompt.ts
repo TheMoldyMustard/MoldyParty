@@ -1,5 +1,38 @@
-export function buildAiPackPrompt(topic: string): string {
+export interface AiPackPromptOptions {
+  game?: 'impostor' | 'charades'
+  mode?: 'classic' | 'henyo' | 'one-word' | 'team-relay'
+}
+
+export function buildAiPackPrompt(topic: string, options: AiPackPromptOptions = {}): string {
   const normalizedTopic = topic.trim() || '[YOUR TOPIC]'
+  if (options.game === 'charades') {
+    const henyoRule = options.mode === 'henyo'
+      ? '\nGenerate concrete nouns suitable for Pinoy Henyo. Every answer needs a useful category anchor.'
+      : ''
+    return `Create a MoldyParty Forehead Charades word pack about ${normalizedTopic}.
+
+Return only valid JSON. Do not use markdown fences, comments, or explanatory text. Use exactly this shape:
+{
+  "packName": "${normalizedTopic}",
+  "category": "Mixed",
+  "items": [
+    { "word": "Adobo", "category": "food", "vibes": ["casual", "pop-culture-local"] }
+  ]
+}
+
+Generate exactly 50 unique items.${henyoRule}
+
+CATEGORY RULES:
+- Use exactly one category per item from: person, place, object, animal, food, pop-culture, other.
+- Prefer concrete, recognizable words or short phrases that are fun to guess aloud.
+
+VIBE RULES:
+- Use one or more values from: casual, pop-culture-local, chaos-hard.
+- Use pop-culture-local for Filipino culture, local references, or current entertainment.
+- Use chaos-hard only for genuinely difficult or absurd answers.
+
+Before returning JSON, silently verify that all 50 words are unique and every category and vibe uses only the allowed values.`
+  }
   return `Create a MoldyParty Impostor word pack about ${normalizedTopic}.
 
 Return only valid JSON. Do not use markdown fences, comments, or explanatory text. Use exactly this shape:

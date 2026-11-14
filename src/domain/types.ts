@@ -1,5 +1,8 @@
 export type GamePhase = 'LOBBY' | 'ROLE_REVEAL' | 'DISCUSSION' | 'VOTING' | 'OUTLIER_GUESS' | 'GAME_OVER'
 export type PlayerRole = 'INNOCENT' | 'IMPOSTOR' | 'JESTER' | 'OUTLIER'
+export type GameId = 'impostor' | 'charades'
+export type CharadesCategory = 'person' | 'place' | 'object' | 'animal' | 'food' | 'pop-culture' | 'other'
+export type CharadesVibe = 'casual' | 'pop-culture-local' | 'chaos-hard'
 
 export interface Player {
   id: string
@@ -10,8 +13,11 @@ export interface Player {
 
 export interface WordItem {
   word: string
-  hint: string
+  hint?: string
   hints?: string[]
+  charadesOnly?: boolean
+  category?: CharadesCategory
+  vibes?: CharadesVibe[]
 }
 
 export interface WordPack {

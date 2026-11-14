@@ -30,6 +30,21 @@ describe('Dexie pack repository', () => {
     expect(await repository.list()).toEqual([expect.objectContaining(pack)])
   })
 
+  it('round-trips mixed Charades metadata without a schema upgrade', async () => {
+    const mixedPack: WordPack = {
+      ...pack,
+      id: 'mixed-pack',
+      items: [
+        { word: 'Adobo', hint: 'Ulam', category: 'food', vibes: ['casual'] },
+        { word: 'Balut', charadesOnly: true, category: 'food', vibes: ['chaos-hard'] },
+      ],
+    }
+
+    await repository.put(mixedPack)
+
+    expect((await repository.list())[0].items).toEqual(mixedPack.items)
+  })
+
   it('renames a saved pack without changing its words', async () => {
     await repository.put(pack)
     await repository.rename(pack.id, 'Studio Ghibli')

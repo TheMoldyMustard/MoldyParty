@@ -1,6 +1,6 @@
 # MoldyParty
 
-MoldyParty is an offline-first, installable pass-the-device party game. Its launch title, **Impostor**, privately assigns roles, guides discussion and secret voting, and reveals the round without requiring accounts, a server, or a network connection.
+MoldyParty is an offline-first, installable pass-the-device party collection. **Impostor** privately assigns roles and guides voting; **Forehead Charades** turns the same device and word library into a fast, tilt-or-tap guessing game. Neither game requires accounts, a server, or a network connection after the first production load.
 
 ## Run locally
 
@@ -32,6 +32,20 @@ The service worker is generated only for production builds. Browser install prom
 Install Playwright's browser once on a new machine with `npx playwright install chromium`.
 
 ## How the game works
+
+### Forehead Charades
+
+1. Open **Forehead Charades**, choose a compatible shared pack, and optionally narrow it by category or vibe.
+2. Pick **Classic** (60/75/90 seconds), **Henyo** (fixed 2:00), **One-Word**, or **Team Relay** with two named rosters and 3–5 turns per team.
+3. Press **Start Get Ready** while holding the phone in its neutral forehead position. The first second calibrates motion input; the full three-second countdown also requests landscape and a screen wake lock when the browser supports them.
+4. Tilt down or tap the right half for **Correct**. Tilt up or tap the left half for **Pass**. Arrow Right and Arrow Left provide a desktop fallback. Tap controls remain available even when motion permission is denied.
+5. Henyo shows a bilingual category anchor plus optional **Oo / Hindi / Pwede** sound buttons. **Foul (-5s)** shortens the clock without changing the card.
+6. Correct/pass feedback uses generated Web Audio tones, optional vibration, text, and a brief color flash. Sound and haptics can be disabled in setup; no audio files are downloaded.
+7. The recap preserves every played word in order. Team Relay alternates teams, rotates holders, and totals scores after both teams finish all configured turns.
+
+The current round, deadline, teams, and no-repeat history are stored locally, so an accidental refresh resumes the same game. Motion, wake lock, vibration, and orientation lock are progressive enhancements; unsupported or declined APIs never prevent tap play.
+
+### Impostor
 
 1. Open **Impostor**, then create a named local session or continue one you already saved. A session keeps the same player roster and cumulative stats across completed rounds.
 2. Add at least three uniquely named players.
@@ -68,17 +82,39 @@ Canonical import/export format:
 }
 ```
 
-Each new-format item contains five hints; one is selected randomly when the round starts. Existing items with a single `"hint"` remain compatible. The fallback format `{ "words": ["..."], "hints": ["..."] }` is also accepted when both arrays have the same length. The AI prompt helper copies a topic-specific prompt that asks ChatGPT, Gemini, or Claude for canonical JSON; no AI service is called by MoldyParty.
+Hints are required only for items used by Impostor. Charades can read the same hinted items or word-only items with optional metadata:
+
+```json
+{
+  "packName": "Party Mix",
+  "items": [
+    {
+      "word": "Adobo",
+      "hint": "A Filipino dish",
+      "category": "food",
+      "vibes": ["casual", "pop-culture-local"]
+    },
+    {
+      "word": "Invisible Roller Coaster",
+      "charadesOnly": true,
+      "category": "other",
+      "vibes": ["chaos-hard"]
+    }
+  ]
+}
+```
+
+Supported categories are `person`, `place`, `object`, `animal`, `food`, `pop-culture`, and `other`. Supported vibes are `casual`, `pop-culture-local`, and `chaos-hard`. Items marked `charadesOnly`, or items without a hint, are excluded from Impostor but stay available to Charades. Existing items with one `"hint"`, items with five `"hints"`, mixed packs, and the legacy `{ "words": ["..."], "hints": ["..."] }` format remain compatible. The AI prompt helper can copy either an Impostor prompt or a 50-card tagged Charades/Henyo prompt; MoldyParty never calls an AI service itself.
 
 ## Architecture
 
 - React, TypeScript, Vite, and Tailwind CSS provide the responsive interface.
-- Pure functions in `src/domain` own validation, role assignment, phase transitions, ballots, ties, and results. Voting can be private (pass-device) or Group Vote (one public/no-handoff ballot); both use the same elimination result rules.
-- Zustand coordinates the finite-state lifecycle (`LOBBY → ROLE_REVEAL → DISCUSSION → VOTING → OUTLIER_GUESS? → GAME_OVER`) and persists the local session registry, aggregate stats, and in-progress recovery.
+- Pure functions in `src/domain` own validation, phase transitions, card/deck policies, role assignment, ballots, ties, relay rotation, and results.
+- Zustand coordinates and persists both finite-state lifecycles, including in-progress recovery from wall-clock deadlines.
 - Dexie stores custom packs in IndexedDB.
 - `vite-plugin-pwa`/Workbox precaches the application shell and supplies an offline navigation fallback.
 - Vitest and Testing Library verify rules and interaction behavior; Playwright verifies complete desktop/mobile and offline journeys.
 
 ## Offline and privacy notes
 
-MoldyParty does not transmit gameplay, session statistics, or custom-pack data. Role reveals, ballots, and unfinished Outlier guesses are remasked after privacy is lost or a saved round is restored. Clearing browser storage, using private browsing, deleting a session, or uninstalling with site-data removal can erase local session stats, packs, and in-progress rounds, so export important packs as JSON. The first visit must be online; subsequent production-build visits can load from the service worker cache.
+MoldyParty does not transmit gameplay, sensor readings, session statistics, or custom-pack data. Charades motion events are interpreted only in the browser and are not recorded. Role reveals, ballots, and unfinished Outlier guesses are remasked after privacy is lost or a saved round is restored. Clearing browser storage, using private browsing, deleting a session, or uninstalling with site-data removal can erase local session stats, packs, no-repeat history, and in-progress rounds, so export important packs as JSON. The first visit must be online; subsequent production-build visits can load either game and saved packs from the service worker cache.

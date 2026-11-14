@@ -7,6 +7,7 @@ import type {
   VoteRecord,
   VoteResult,
 } from './types'
+import { eligibleItems } from './packCompatibility'
 
 const MIN_PLAYERS = 3
 
@@ -40,8 +41,8 @@ export function validateSetup(input: GameSetupInput): SetupErrors {
   if (reservedRoles >= input.playerNames.length) {
     errors.push('Leave at least one player as an Innocent.')
   }
-  if (input.pack.items.length === 0) {
-    errors.push('Choose a word pack with at least one item.')
+  if (eligibleItems(input.pack, 'impostor').length === 0) {
+    errors.push('Choose a word pack with at least one Impostor-compatible item.')
   }
   if (
     input.discussionDurationSeconds !== null &&
@@ -68,12 +69,15 @@ export function createRound(input: GameSetupInput, random: () => number = Math.r
     throw new Error(errors.join(' '))
   }
 
+  const impostorItems = eligibleItems(input.pack, 'impostor')
   const wordIndex = Math.min(
-    input.pack.items.length - 1,
-    Math.floor(random() * input.pack.items.length),
+    impostorItems.length - 1,
+    Math.floor(random() * impostorItems.length),
   )
-  const selectedItem = input.pack.items[wordIndex]
-  const hintPool = selectedItem.hints?.length ? selectedItem.hints : [selectedItem.hint]
+  const selectedItem = impostorItems[wordIndex]
+  const hintPool = selectedItem.hints?.filter((hint) => hint.trim()).length
+    ? selectedItem.hints.filter((hint) => hint.trim())
+    : [selectedItem.hint ?? '']
   const hintIndex = Math.min(hintPool.length - 1, Math.floor(random() * hintPool.length))
   const roleIndexes = shuffledIndexes(input.playerNames.length, random)
   const impostorIndexes = new Set(roleIndexes.slice(0, input.impostorCount))

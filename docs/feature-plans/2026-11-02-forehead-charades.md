@@ -1,581 +1,569 @@
-# Forehead Charades / Guess the Word Implementation Plan
+# Forehead Charades Feature Impact and Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Status:** Planning only
 
-**Goal:** Add an offline Forehead Charades game in which named players or teams take timed turns, mark words correct or passed with tap or optional tilt controls, review each turn, and reuse the same local word-pack library as Impostor—including custom packs containing 50 or more words.
+**Created:** 2026-11-02
 
-**Architecture:** Keep Impostor's finite-state machine unchanged and add a separate pure Charades domain plus a separately persisted Zustand store. Extend the shared `WordPack` contract backward-compatibly so a pack may contain word-only items; Charades accepts every valid word, while Impostor continues to show only packs whose items all have usable hints. React screens render the Charades setup, handoff, active turn, round summary, and final scoreboard; sensor input is an optional adapter over the same `correct`/`pass` commands used by tap and keyboard controls.
+**Last updated:** 2026-11-13
+**Goal:** Add an offline-first Forehead Charades game with Classic, Henyo, One-Word, and Team Relay modes; reliable tap and calibrated tilt controls; mobile/PWA lifecycle handling; sensory feedback; shared Impostor word packs; and tagged, no-repeat decks.
 
-**Tech Stack:** React 19, TypeScript, Zustand 5, Dexie 4 / IndexedDB, Vite 8 PWA, Vitest, Testing Library, Playwright mobile and desktop Chromium
-
-**Spec:** The feature brief, decisions, contracts, and acceptance criteria are embedded in this document; there is no separate spec artifact.
-
-## Global Constraints
-
-- Planning only: this document is the only repository change authorized by the request.
-- The app remains account-free, backend-free, installable, and playable offline after its first successful production load.
-- Existing Impostor packs and saved Impostor sessions remain readable without data migration.
-- A Charades custom pack has no application-level maximum and must comfortably support at least 50 unique words; the AI helper requests exactly 50 items.
-- Existing Impostor packs are selectable in Charades without copying or transforming their stored records.
-- Word-only Charades packs must not appear as valid choices in Impostor until every item has a usable hint.
-- Default turn duration is 60 seconds; the setup supports 10–600 seconds per player/team.
-- Correct-answer bonus and pass penalty are independently optional, default off, and allow 1–30 seconds when enabled.
-- A correct answer scores one point; a pass scores zero points. Time changes never directly change score.
-- Tap and keyboard controls always work. Tilt controls are progressive enhancement and may never be the only way to play.
-- Do not store raw motion/orientation readings or transmit gameplay, pack, or sensor data.
-- Existing minimum 48px targets, safe-area handling, focus visibility, and reduced-motion behavior remain intact.
-
-## Review Focus
-
-- A 50+ word bulk entry must remain responsive, preserve line-level validation, and reject blank/duplicate normalized words without losing the user's text (Task 4).
-- Legacy packs with one `hint`, packs with `hints[]`, and new word-only packs must round-trip without silently inventing or dropping hints (Tasks 2–3).
-- A sensor event and a tap arriving together must resolve only one word, and a held tilt must not repeatedly score until the phone returns to neutral (Tasks 9–10).
-- Timer reconciliation must be correct across backgrounding, refresh, correct bonuses, pass penalties, and an event at or after the deadline (Tasks 6–7).
-- A denied/unavailable orientation permission must leave visible tap controls usable and must not block a turn (Tasks 9–10).
-
----
+This document is the canonical plan for the feature. It supersedes the simpler Charades scope previously recorded at this path. No product code, configuration, dependency, database, or git-history change is authorized by this planning task.
 
 ## 1. Decision Summary and Feature Brief
 
-### Recommended product behavior
+### Recommendation
 
-Add a second launch card, **Forehead Charades**, beside Impostor. Setup asks for:
+Add **Forehead Charades** as a second first-class game on the MoldyParty home screen. Build one isolated Charades domain/store and one shared timed-card engine, with a policy object for each sub-mode:
 
-- participant type (`Players` or `Teams`) and at least two unique names;
-- one shared built-in or custom pack;
-- seconds per turn (default `60`, allowed `10–600`);
-- optional correct-answer bonus (default disabled; `1–30` seconds when enabled);
-- optional pass penalty (default disabled; `1–30` seconds when enabled); and
-- optional tilt controls (default enabled, but used only after capability/permission checks).
+| Mode | Timer and flow | Mode-specific behavior |
+|---|---|---|
+| Classic | Selectable 60, 75, or 90 seconds; one holder per round | Freeform clues, acting, and impressions; rapid correct/pass cycling. |
+| Henyo | Fixed 2:00 active timer | Bilingual category badge; strict `Oo / Hindi / Pwede` (`Yes / No / Maybe`) helper buttons; optional synthesized chimes; manual `Foul (-5s)` without changing the card. |
+| One-Word | Selectable 60, 75, or 90 seconds; one holder per round | Rule banner states that each clue-giver may say only one word per card. The app records outcomes but does not pretend to police speech. |
+| Team Relay | Two named teams; 3–5 rounds; each team gets one turn per round | Alternate teams, rotate through each team's ordered member list, and maintain cumulative team scores. Three rounds therefore means six timed turns. |
 
-The session flow is:
+The active-round screen uses two full-height semantic tap buttons: left = **Pass**, right = **Correct**. They can be visually quiet but must remain keyboard- and screen-reader-operable. Optional orientation input emits the same semantic commands after a one-second neutral-pose calibration during a three-second **Get Ready** countdown. Every input path passes through one token-guarded command so a tap and tilt cannot score the same card twice.
 
-`SETUP → HANDOFF → ACTIVE_TURN → TURN_SUMMARY → HANDOFF (next participant) → … → FINAL_SCORE`
+Use a best-effort device lifecycle layer during Get Ready and active play:
 
-During `ACTIVE_TURN`, the current word fills the screen. Tapping the right zone, pressing `ArrowRight`, or tilting down marks it correct. Tapping the left zone, pressing `ArrowLeft`, or tilting up passes. Each accepted action records `{word, outcome, timeDeltaSeconds, occurredAtMs}`, advances to the next word, and uses a short input lock so two input sources cannot score the same word. The timer reaching zero ends the turn immediately. The summary lists correct and passed words, the turn score, and time adjustments, then explicitly hands the device to the next participant. After every participant has taken one turn, the final scoreboard ranks by correct answers and preserves ties.
+- request/resume Web Audio from the Start gesture;
+- request orientation permission only when motion is enabled;
+- calibrate for one second, then arm tilt recognition with deadzone, dwell, hysteresis, and neutral reset;
+- acquire a screen wake lock while visible and reacquire after returning to the page;
+- request landscape orientation when allowed, otherwise show a non-blocking rotate prompt and continue in a portrait-safe layout;
+- release listeners, wake lock, orientation lock, timers, and audio scheduling on summary, exit, or unmount.
 
-### Word deck policy
+All device APIs are progressive enhancements. Tap controls, timer completion, scoring, and summaries must work when every optional API is missing or denied.
 
-Shuffle the selected pack into one session-level queue. Consume words without replacement across all participants for fairness. When every word has been consumed, reshuffle the full pack and continue, ensuring the immediately previous word is not first when the pack has more than one item. This makes existing 12-word built-ins playable while giving 50+ word custom packs substantially fewer repeats. Require at least two usable words to start.
+### Shared pack decision
 
-### 50+ custom-pack behavior
+Keep one Dexie pack library. Extend each `WordItem` with optional Charades metadata rather than creating a second pack type or copying Impostor records. Eligibility is computed per item, not per pack:
 
-Keep the existing row editor for hinted Impostor-compatible packs and add a Charades-focused bulk editor accepting one word per line. Show a live unique-word count, preserve the entered lines on validation failure, allow saving from two words upward, and recommend 50+ without imposing a hard maximum. The AI prompt helper gains a Charades mode that requests exactly 50 unique `{ "word": "…" }` items. Existing Impostor packs are immediately usable in Charades because Charades reads only `item.word`.
+- Charades accepts every nonblank word.
+- Impostor accepts an item only when it is not `charadesOnly` and has at least one usable hint.
+- A pack is shown in a game only when enough eligible items remain for that game's start rule.
+- Filtering by category/vibe happens before the Charades deck is created, and setup displays the resulting eligible count.
 
-## 2. Scope, Non-goals, Permissions, and Assumptions
+This allows mixed packs: hinted words remain usable in both games, while word-only or explicitly `charadesOnly` entries remain Charades-only without hiding the rest of the pack from Impostor.
 
-### In scope
+### Scope
 
-- A second game entry point and complete pass-the-device Charades session.
-- Player and team naming using the same runtime model, with copy adjusted by participant type.
-- Configurable turn duration and independently toggled time bonus/penalty.
-- Tap, keyboard, and optional tilt input.
-- Shared local pack library, word-only pack compatibility, bulk 50+ entry, JSON import/export, and AI prompt mode.
-- Refresh/background timer reconciliation, offline precaching, unit/component/E2E coverage, and README updates.
+In scope:
 
-### Non-goals
+- A second game card and complete setup → Get Ready → active turn → round recap → session summary flow.
+- Four mode policies, with cumulative Team Relay scheduling and holder rotation.
+- Correct/pass tap zones, desktop keyboard fallback, calibrated tilt input, wake lock, and best-effort landscape handling.
+- Zero-asset Web Audio cues, vibration, color flashes, and ten-second countdown ticks, each safely no-oping when unavailable.
+- Henyo category badges, optional answer buttons/chimes, and a manual five-second foul penalty.
+- Per-card category and vibe metadata, filter pills, mixed-pack compatibility, game-aware AI prompt generation, and a no-repeat local history.
+- Recovery from refresh/backgrounding, local-only persistence, offline production behavior, and automated plus real-device verification.
 
-- Speech recognition or automatic answer detection.
-- Online multiplayer, accounts, cloud sync, remote AI calls, analytics, or leaderboards.
-- Multiple rounds per participant, tournament brackets, team membership rosters, or per-team turn orders in this release.
-- Editing built-in packs.
-- User-configurable tilt thresholds or gesture remapping in the first version.
-- Native-only APIs or a separate iOS/Android application.
+Non-goals:
 
-### Permissions
+- Speech recognition, microphone access, automatic enforcement of Henyo/One-Word speech rules, or voice-command scoring.
+- Online multiplayer, accounts, cloud sync, remote AI calls, analytics, leaderboards, or a backend.
+- More than two teams, tournament brackets, remote phones, casting, or synchronized companion screens.
+- Full application localization. Henyo's category and answer labels are bilingual; the rest of the UI remains in the current app language.
+- Forcing fullscreen or blocking play until the device rotates. Orientation lock is not dependable enough to be a hard prerequisite.
+- Editing built-in packs, storing raw sensor samples, or adding audio assets/dependencies.
 
-- Orientation permission is requested only from the explicit **Start turn** gesture and only when the user enabled tilt controls.
-- Denial, dismissal, unsupported hardware, insecure context, or sensor failure downgrades to tap/keyboard controls with a non-blocking status message.
-- No pack or session data leaves the browser profile.
+### Permissions and privacy
 
-### Assumptions
+- Orientation permission is requested only from the explicit Start/Ready gesture and only when motion controls are enabled.
+- No raw `alpha`, `beta`, or `gamma` samples are persisted, logged, exported, or transmitted.
+- Wake lock, orientation lock, vibration, and audio are capability-checked and never gate the round.
+- Packs, no-repeat history, game state, and score remain in the browser profile. Existing offline/privacy guarantees remain unchanged.
+- Hydrated local state is treated as untrusted input and normalized before use; local players can edit browser storage, so this is a party-game integrity boundary, not anti-cheat security.
 
-- “Player/team” means the host chooses one label for a session; both use the same ordered participant model and each entry receives one turn.
-- “50+” means the editor and persistence layer support at least 50 words comfortably, not that every pack must contain 50 words.
-- Correct/pass time changes apply immediately to the current turn only. Bonus time may extend a turn beyond its original duration; penalty is floored at zero.
-- The user wants Impostor-to-Charades reuse; Charades-only word packs are intentionally not eligible for Impostor until hints are added.
-- A refreshed active turn reconciles against its persisted absolute deadline. If the deadline elapsed, it opens that participant's summary rather than silently starting a new turn.
+### Assumptions made for planning
 
-## 3. Current-state Evidence Ledger
+- A Team Relay “round” completes after both teams have taken one turn; 3–5 rounds means 6–10 turns.
+- Each relay team has a team name and one or more ordered member names. The next holder is `members[teamTurnCount % members.length]`.
+- Classic and One-Word default to 60 seconds; Henyo is fixed at 120 seconds; setup offers 60/75/90 only where the mode permits it.
+- A correct answer scores one point; a pass and a foul score zero. A foul only subtracts five seconds and may end the turn at zero.
+- The no-repeat cache is enabled by default, is scoped to the pack, and can be cleared from setup. When an eligible filtered subset is exhausted, only that subset is released for a new cycle.
+- Existing untagged words remain usable. Their Henyo category is derived from a known pack category when possible, otherwise displayed as `Other / Iba`.
+- Feedback defaults to enabled when supported, with separate Sound and Haptics toggles persisted as preferences. Visual correct/pass state and text are always present, so feedback never relies on color, sound, or vibration alone.
+
+## 2. Current-State Evidence Ledger
 
 | Status | Evidence | Consequence |
 |---|---|---|
-| Confirmed | `src/App.tsx` owns an in-memory `AppView = 'home' \| 'lobby' \| 'packs'` and routes directly from the Impostor store phase. | A second game needs explicit app-level routing and must not overload Impostor's phase union. |
-| Confirmed | `src/domain/types.ts` defines `WordItem { word: string; hint: string; hints?: string[] }` and `WordPack.items: WordItem[]`. | Word-only Charades packs require a backward-compatible contract extension, while existing hinted records remain valid. |
-| Confirmed | `src/features/packs/packDb.ts#createPackRepository` stores full `WordPack` records in one Dexie `packs` table keyed by `id`; repository operations are game-agnostic. | Both games can share one durable library without a second database or copied records. |
-| Confirmed | `src/features/packs/packParser.ts#normalizeItems` currently rejects an item without `hint`/`hints`, enforces case-insensitive uniqueness, and has no maximum item count. | Capacity already exceeds 50, but parsing and UI must allow word-only items and retain strict duplicate/blank checks. |
-| Confirmed | `src/features/packs/PackManager.tsx` uses one React row per word and an Impostor-specific hint field. | Entering 50 words row-by-row is avoidable friction; a bulk word editor is the appropriate Charades path. |
-| Confirmed | `src/features/packs/aiPrompt.ts#buildAiPackPrompt` requests 25 items and exactly five hints per item. | Add a game-aware prompt contract; do not weaken the existing Impostor prompt. |
-| Confirmed | `src/features/game/LobbyScreen.tsx` loads `[...builtInPacks, ...customPacks]` directly with no compatibility filter. | Before word-only records are saved, Impostor must filter packs through a shared eligibility function. |
-| Confirmed | `src/store/gameStore.ts#createGameStore` persists Impostor setup/game under `moldyparty-game`, masks secrets on hydration, and owns discussion timer deadlines. | Charades should use a separate key and store so changes cannot corrupt Impostor recovery. The deadline pattern is reusable. |
-| Confirmed | `src/styles.css` already enforces 48px buttons, safe-area insets, focus styles, `touch-action: none` on the reveal pad, and reduced-motion handling. | New full-screen controls should extend these tokens and interaction conventions instead of creating a second visual system. |
-| Confirmed | `playwright.config.ts` runs desktop Chromium and Pixel 7 projects. | Tap flows and layout can be covered on both; real sensor behavior still needs device QA because Playwright does not validate physical orientation hardware. |
-| Confirmed | `docs/superpowers/specs/2026-11-02-moldyparty-design.md` lists “Multiple game titles in the first release” as a non-goal. | This request intentionally supersedes that original release boundary; the living design document must be updated when the feature ships, while the original implementation plan remains historical. |
-| Confirmed | Baseline on 2026-11-02: `npm run test:run` passed 57/57 tests, `npm run lint` passed, `npm run build` passed with 13 precached entries, and `npm run e2e` passed 4/4 tests. | Implementation starts from a clean verified baseline; regressions are attributable to the feature branch. |
-| Inferred | No API, auth, server schema, event bus, or telemetry exists in the repository or declared dependencies. | Security and observability work is client-side validation, permission handling, recovery UI, and tests—not backend work. |
-| Unverified | Orientation event sign/axis behavior varies with device, browser, portrait lock, and how the phone is held. | Ship fixed conservative defaults plus tap fallback, and require real iOS/Android device QA before calling tilt production-ready. |
+| Confirmed | `src/App.tsx:15-20` owns an in-memory `AppView`, and `src/App.tsx:64-76` renders only the Impostor launch card. | Charades needs explicit app orchestration and a persisted active-game discriminator; its phases must not be added to Impostor's union. |
+| Confirmed | `src/domain/types.ts:11-24` requires `WordItem.hint` and gives only the pack a `category`. | Per-item optional hints, category, vibe, and `charadesOnly` are backward-compatible structural additions, but all hint consumers must be filtered first. |
+| Confirmed | `src/domain/game.ts:65-78` selects directly from `input.pack.items` and assumes a hint pool exists. | Impostor must receive or derive an eligible-item view before random selection; widening the type first without this guard would create a runtime failure. |
+| Confirmed | `src/features/game/LobbyScreen.tsx:53-55,88` merges every built-in/custom pack and passes the selected pack unchanged. | The Impostor picker and submit path both need centralized compatibility filtering; UI filtering alone is insufficient. |
+| Confirmed | `src/features/packs/packParser.ts:13-51` rejects missing hints and enforces normalized word uniqueness; `serializeWordPack` at lines 116-123 emits only word/hint data. | Parsing/serialization must preserve optional Charades metadata and legacy hint shapes without inventing values. |
+| Confirmed | `src/features/packs/packDb.ts:4-10,20-34` stores complete `WordPack` values in one Dexie v1 table with no item-level indexes. | Optional item fields need no Dexie schema migration; repository coexistence tests are still required. |
+| Confirmed | `src/features/packs/PackManager.tsx:55-77` converts manual rows to hinted JSON; import/export already passes through the shared parser. | Add a Charades-aware bulk/metadata path without weakening the existing Impostor editor. |
+| Confirmed | `src/features/packs/aiPrompt.ts:1-28` is a local prompt builder requesting 25 hinted Impostor items; `AiPromptHelper.tsx:9-23` only copies the result. | “AI hooks” should remain local prompt generation: add game/mode/schema options, not a network integration. |
+| Confirmed | `src/store/gameStore.ts:362-364,400,717-720,760-793` uses a versioned persisted Zustand store and localStorage; its timer uses an absolute deadline at lines 620-641. | Use a separate versioned Charades key/store, reuse the absolute-deadline pattern, and validate migrations independently. |
+| Confirmed | `src/store/preferencesStore.ts:4-18` persists only discussion defaults and install-prompt dismissal. | Feedback preferences may extend this store; active-game routing belongs in a small dedicated app store rather than overloading preferences. |
+| Confirmed | `vite.config.ts` sets manifest orientation to `any`, precaches emitted JS/CSS/HTML/SVG/WOFF2, and adds no media assets. | Keep setup/summary orientation flexible; request landscape only during active play. Synthesized audio adds no cache rule or asset. |
+| Confirmed | `src/styles.css:29-31,40,102,181` already provides minimum button height, focus styles, safe areas, reduced-motion handling, and a touch-action precedent. | Charades should extend the same accessibility and safe-area system; active controls need explicit pointer-event ownership and reduced-effects behavior. |
+| Confirmed | `playwright.config.ts:13-15` runs Desktop Chrome and Pixel 7 Chromium projects. | Core flow and mocked capability branches can be automated, but physical iOS/Android sensor behavior remains a release gate. |
+| Confirmed | `docs/superpowers/specs/2026-11-02-moldyparty-design.md:17-24` originally excluded multiple titles while requiring installable offline use. | This feature intentionally supersedes the single-title boundary while preserving the offline/no-backend invariants. |
+| Confirmed | Read-only baseline on 2026-11-13: `npm run test:run -- --reporter=dot` passed 124/124 tests in 10 files; `npm run lint` exited cleanly. | Implementation should preserve this baseline; the earlier plan's 57-test count is stale. |
+| Confirmed | W3C Screen Wake Lock requires a visible, fully active document and permits automatic release; W3C Screen Orientation allows user-agent preconditions and accessibility exceptions. | Wake lock must be reacquired after visibility changes, and orientation lock must be advisory with a portrait fallback. See standards references below. |
+| Inferred | No API, auth, event bus, telemetry, or server dependency exists in source/dependencies. | Security, observability, and rollback stay client-side; no backend contract or migration is expected. |
+| Unverified | Actual tilt axis/sign, orientation-lock availability, vibration support, and wake-lock behavior vary across browser/OS/device posture. | Do not encode production confidence from jsdom/Chromium mocks; run the physical-device matrix before rollout. |
 
-## 4. End-to-end Impact and Consumer Map
+Standards references checked 2026-11-13:
 
-| Producer / owner | Changed contract | Consumers that must change |
+- [W3C Screen Wake Lock](https://www.w3.org/TR/screen-wake-lock/)
+- [W3C Screen Orientation](https://www.w3.org/TR/screen-orientation/)
+- [W3C Device Orientation and Motion](https://www.w3.org/TR/orientation-event/)
+- [MDN Web Audio best practices](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Best_practices)
+
+## 3. End-to-End Impact and Consumer Map
+
+| Producer / owner | Contract change | Direct consumers and required response |
 |---|---|---|
-| `src/domain/types.ts` | `WordItem.hint` becomes optional; add shared `GameId`/pack-compatibility typing if needed. | `builtInPacks.ts`, `game.ts`, `packParser.ts`, `PackManager.tsx`, `LobbyScreen.tsx`, tests, Charades domain/setup. |
-| `packParser.ts` | Canonical items may be `{word}` or `{word, hint}` / `{word, hints}`; serializer preserves the form. | Imports, manual/bulk saves, export, offline E2E, README schema examples. |
-| New `packCompatibility.ts` | `getPackCompatibility(pack)` and `isPackUsableFor(pack, game)` are the only eligibility rules. | Impostor category picker, Charades pack picker, pack manager badges, validation tests. |
-| `packDb.ts` | Storage remains table version 1; values become structurally broader but keys/indexes do not change. | No Dexie migration expected; repository tests must prove legacy/new records coexist. |
-| `PackManager.tsx` / `AiPromptHelper.tsx` | Game-aware editor/prompt mode and 50+ bulk entry. | App pack routing from both setups and existing pack-manager tests. |
-| New Charades domain | Setup/session state, queue shuffle, outcomes, score, summary, tie ranking. | Charades store and every Charades screen. |
-| New Charades store | Commands and persisted recovery under `moldyparty-charades`. | App routing, timer hook, Charades screens, store/component/E2E tests. |
-| New orientation adapter | Emits semantic `correct`/`pass` once per neutral-to-threshold gesture. | Active-turn screen only; domain/store remain sensor-agnostic. |
-| `preferencesStore.ts` | Persist `activeGameId: GameId | null` with a version-2 migration. | App routing, both setup start actions, home/exit actions, and refresh recovery. |
-| `App.tsx` | Home exposes two launch cards and a route for each setup/library context. | App shell tests, Impostor flow tests, E2E selectors, CSS layout. |
-| `vite.config.ts` / service worker | No new runtime dependency; newly emitted chunks are precached by existing patterns. | Build verification and offline Charades E2E. |
+| `src/domain/types.ts` | `WordItem.hint` becomes optional; add `charadesOnly?`, `category?`, and `vibes?`. | `builtInPacks.ts`, `game.ts`, pack parser/manager/DB tests, both game pickers, Charades filters, README schema. |
+| New `src/domain/packCompatibility.ts` | Central `eligibleItems(pack, game, filters?)` and `isPackUsableFor(...)`. | Impostor lobby and `createRound`, Charades setup/deck builder, Pack Manager badges/counts, import validation, tests. |
+| `src/features/packs/packParser.ts` | Accept and preserve hinted, hintless, mixed, tagged, and legacy formats. | JSON paste/upload, manual/bulk save, export, AI-generated packs, offline E2E. |
+| `src/features/packs/packDb.ts` | Value type broadens; Dexie schema/indexes stay v1. | No migration expected; repository tests prove old/new records coexist and round-trip. |
+| `src/features/packs/PackManager.tsx` | Game compatibility badges; Charades bulk entry/default metadata; tagged item editing or JSON guidance. | Existing pack CRUD tests, Impostor editor behavior, Charades setup return path. |
+| `src/features/packs/aiPrompt.ts` | Prompt options for Impostor vs Charades/Henyo; Charades requests 50 unique tagged items. | `AiPromptHelper.tsx`, prompt tests, README examples; no remote service consumer. |
+| New `src/domain/charades.ts` | Pure mode policies, validation, team schedule, deck/history rules, scoring, timer/foul transitions, ranking. | Charades store and all Charades screens; no browser APIs inside domain. |
+| New `src/store/charadesStore.ts` | Persisted setup/session snapshot and semantic commands under `moldyparty-charades`. | App router, Get Ready, active round, recap/scoreboard, recovery tests. |
+| New `src/store/appStore.ts` | Persist `activeGameId: 'impostor' | 'charades' | null` under `moldyparty-app`. | `App.tsx`, both start/exit flows, legacy Impostor recovery. |
+| `src/store/preferencesStore.ts` | Add sound/haptics preferences and a versioned migration/defaults. | Charades setup/device feedback only; existing discussion preference remains unchanged. |
+| New input adapters | Orientation recognizer emits `correct`/`pass`; keyboard/tap emit the same commands. | Active-round controller; adapters never mutate score directly. |
+| New device services | Wake lock, orientation lock/prompt, Web Audio synth, vibration, and visibility lifecycle. | Get Ready/active controller; status HUD; cleanup tests. |
+| New no-repeat repository | Bounded localStorage history keyed by pack plus normalized words. | Deck builder, setup Reset action, hydration corruption tests. It does not change Dexie packs. |
+| `src/App.tsx` | Add launch card, Charades routes, pack-manager return context, and active-game precedence. | App tests, existing Impostor flow, offline navigation, CSS. |
+| `src/styles.css` | Landscape active-round layout, tap halves, flashes, category/answer controls, safe areas. | Mobile/desktop responsive tests and reduced-effects checks. |
+| PWA build | No dependency or manifest-wide landscape change; emitted code is precached by existing patterns. | Build/offline E2E and installed-PWA physical QA. |
 
-## 5. Conflicts, Invariants, Risks, and Design Options
+No backend, API, authentication, authorization, audit-log, server schema, job, or remote event consumer was discovered.
+
+## 4. Conflicts, Invariants, Risks, and Design Options
 
 ### Intentional invariants
 
-- Impostor requires a usable hint for every selectable word.
-- Packs remain local, editable, importable/exportable, and identified by stable IDs.
-- Game rules live in pure functions; React issues commands and renders state.
-- Pass-the-device transitions are explicit and no secret/private state is exposed during handoff.
-- Timers use absolute deadlines for background/refresh correctness rather than decrement-only intervals.
+- Impostor receives only words with usable hints and must behave exactly as it does today for legacy packs.
+- Packs remain local, importable/exportable, and stored once by stable pack ID.
+- Game rules and score transitions are pure; React and browser adapters issue commands and render state.
+- Timers use absolute deadlines and reconcile on visibility/focus/hydration, rather than trusting interval ticks.
+- Pass-device transitions explicitly identify the next holder; a new word is not exposed before Get Ready completes.
+- Tap input is always available; motion and device APIs are optional enhancements.
+- Offline play, safe-area layout, visible focus, minimum target sizing, and reduced-effects behavior remain intact.
 
-### Avoidable friction to remove
+### Design alternatives
 
-- Fifty row components with hint inputs are an unsuitable primary path for a 50-word Charades deck.
-- Requiring hints for Charades-only packs adds irrelevant work.
-- Copying Impostor packs into a second store would create drift and duplicate delete/rename behavior.
-- Direct sensor logic in the component or store would make scoring race-prone and difficult to test.
+#### Option A — Recommended: one engine with explicit mode policies
 
-### Design options
+Create one Charades session model and store. A `MODE_POLICIES` table defines duration choices, whether Henyo helpers exist, whether teams are required, number of turns, and summary behavior. Browser input/feedback adapters sit outside the store and send semantic commands.
 
-#### Option A — Recommended: shared flexible pack, filtered eligibility, separate game store
+Tradeoff: the shared state model is broader, but invariants, recovery, scoring, and device cleanup are implemented once. A policy cannot silently invent behavior because each mode has focused tests.
 
-Make hints optional at the shared item level, derive each pack's game compatibility, and keep one Dexie table. Add a separate Charades domain/store and consume the same pack object by ID/snapshot.
+#### Option B — Separate flow/store for every mode
 
-Tradeoffs: maximizes reuse and keeps game lifecycles isolated; requires careful filtering so a word-only pack never enters Impostor. A full rollback must retain the compatibility filter while word-only records may exist.
+Each mode gets its own screens and persisted state.
 
-#### Option B — Keep hints mandatory for every custom Charades word
+Tradeoff: initially straightforward, but duplicates deck selection, deadline recovery, tap/tilt races, recap UI, and device lifecycle four times. Fixes would drift, especially between Classic and One-Word. Rejected.
 
-Reuse the current schema unchanged and require every new Charades word to include an Impostor hint.
+#### Option C — One highly configurable active component with conditional branches
 
-Tradeoffs: simplest contract and safest rollback, but makes a 50+ word Charades deck needlessly expensive to create and does not match the requested fast custom-word workflow. Rejected.
+Keep a minimal store and place mode decisions inside a single React screen.
 
-#### Option C — Separate Charades pack table with “Import from Impostor” copies
+Tradeoff: fewer files, but domain rules, browser effects, rendering, and scoring become coupled and hard to test. Refresh/background recovery and relay scheduling would depend on component lifecycle. Rejected.
 
-Store word-only decks separately and copy words from selected Impostor packs.
+### Pack alternatives
 
-Tradeoffs: avoids widening `WordItem`, but rename/delete/edit operations diverge and copied packs become stale. It explicitly loses the “same stored words” synergy. Rejected.
+- **Recommended:** optional per-item metadata plus computed per-game eligibility. Mixed packs work without copies.
+- **Rejected:** require hints on every Charades word. This keeps today's type but makes Charades-only creation needlessly expensive and defeats `charadesOnly`.
+- **Rejected:** create a second Charades pack table. Copies drift on rename/edit/delete and violate the unified-library goal.
 
-### Highest-impact risks and mitigations
+### Highest-impact conflicts and mitigations
 
-1. **Input races:** funnel tap, keyboard, and tilt through one `submitOutcome(outcome, now)` action with a state/word token guard.
-2. **Timer manipulation/errors:** compute remaining time from injected clock and persisted deadline; clamp penalties at zero; reject outcomes at/after expiry.
-3. **Sensor variance:** calibrate relative to the starting pose, require dwell and neutral reset, expose status, and retain full tap controls.
-4. **Pack compatibility regression:** centralize eligibility and test all legacy/new shapes; never duplicate ad hoc `hint` checks in screens.
-5. **Large editor performance:** use one textarea, parse on submit or debounced count, and avoid rendering 50 controlled row pairs.
-6. **Rollback with word-only records:** rollback Charades UI/store independently but retain the optional-hint parser/serializer and Impostor eligibility filter until records are migrated or deleted.
+1. **Widening `WordItem` can break Impostor.** Land `packCompatibility.ts`, domain filtering, and regression tests before any UI can write hintless items.
+2. **Tap/tilt/helper-button races can double-score.** Every card has a monotonically changing token. `submitOutcome(outcome, token, now)` is the only score/advance command and rejects stale tokens, non-active phases, input lockout, and `now >= deadlineMs`.
+3. **Henyo helper buttons sit inside full-screen tap zones.** Buttons stop pointer propagation and invoke only their own audio/penalty action. Tests must prove answer/foul taps never score or pass a card.
+4. **Calibration can encode a bad pose.** Collect valid samples for one second, use a median baseline, require a minimum sample count/stability, and fail open to tap with a visible status. Never begin the active timer before calibration/countdown finishes.
+5. **Orientation axes change with screen rotation.** Normalize beta/gamma using `screen.orientation.angle`, then apply relative thresholds. Keep sign/threshold constants isolated and require physical QA in portrait/landscape and browser/PWA modes.
+6. **Wake/orientation APIs can be rejected or auto-released.** Treat them as advisory; reacquire wake lock only when visible and active, catch every promise rejection, unlock/release on exit, and never pause gameplay on failure.
+7. **Audio autoplay policies can suppress cues.** Create/resume `AudioContext` from Start, expose Sound off, and keep visual/text feedback authoritative.
+8. **Timer/background races can accept late outcomes.** Reconcile from the absolute deadline inside every command and lifecycle callback; the first expiry transition wins exactly once.
+9. **No-repeat filters can starve a small subset.** Select unseen eligible words first; when none remain, clear only the current eligible subset, avoid placing the immediately previous word first when possible, and continue.
+10. **Color flashes can be inaccessible or uncomfortable.** Use short single-state overlays, icons/text/ARIA announcements, no strobing, and reduced-effects CSS. Color is never the sole signal.
+11. **Relay holder rotation can desynchronize after refresh.** Persist team turn counts and derive the next member; do not persist a duplicate mutable holder index.
+12. **Rollback after hintless data exists.** A UI rollback must retain the optional-hint reader and Impostor eligibility filter until those records are explicitly migrated or deleted.
 
-## 6. Recommended Architecture, Data Flow, Security, and Error Behavior
+## 5. Recommended Architecture and Data Flow
 
-### Proposed Charades state
+### Domain contracts
 
 ```ts
-type CharadesPhase = 'SETUP' | 'HANDOFF' | 'ACTIVE_TURN' | 'TURN_SUMMARY' | 'FINAL_SCORE'
+type GameId = 'impostor' | 'charades'
+type CharadesMode = 'classic' | 'henyo' | 'one-word' | 'team-relay'
+type CharadesPhase = 'SETUP' | 'GET_READY' | 'ACTIVE' | 'ROUND_SUMMARY' | 'SESSION_SUMMARY'
 type CharadesOutcome = 'correct' | 'pass'
-type ParticipantKind = 'player' | 'team'
+type CharadesCategory = 'person' | 'place' | 'object' | 'animal' | 'food' | 'pop-culture' | 'other'
+type CharadesVibe = 'casual' | 'pop-culture-local' | 'chaos-hard'
 
-interface CharadesSettings {
-  participantKind: ParticipantKind
-  participantNames: string[]
-  pack: WordPack
-  turnDurationSeconds: number
-  correctBonusSeconds: number | null
-  passPenaltySeconds: number | null
-  tiltEnabled: boolean
-}
-
-interface CharadesTurnEvent {
-  word: string
-  outcome: CharadesOutcome
-  timeDeltaSeconds: number
-  occurredAtMs: number
-}
-```
-
-`CharadesSession` additionally owns phase, ordered participants, current participant index, current word, current word token, remaining shuffled queue, completed queue cycles, active deadline, current events, and completed turn summaries. The persisted store keeps settings and session but not transient interval handles, input locks, sensor samples, or permission objects.
-
-### Command/data flow
-
-1. Setup loads the shared Dexie library and filters with `isPackUsableFor(pack, 'charades')`.
-2. `startSession(settings)` validates names, numbers, and at least two usable words, snapshots the selected `WordPack`, shuffles its words with injected randomness, and enters `HANDOFF`.
-3. **Start turn** optionally requests orientation permission, then `beginTurn(now)` sets the first word and `deadlineMs = now + turnDurationSeconds * 1000`.
-4. Tap/keyboard/tilt call the same `submitOutcome(outcome, wordToken, now)` store action.
-5. The action reconciles expiry, computes `+bonus`, `-penalty`, or `0`, records one event, updates deadline, and advances the queue.
-6. A 250ms display/input guard prevents accidental double events; the token check is the authoritative race defense.
-7. `syncTimer(now)` runs on a short visual interval and on `visibilitychange`, `pageshow`, focus, and hydration. Expiry enters `TURN_SUMMARY` exactly once.
-8. Summary advances to the next `HANDOFF` or `FINAL_SCORE` after the last participant.
-
-App-level recovery uses `preferencesStore.activeGameId`. Starting either game sets its ID before creating the session; exiting that game clears the ID. On first hydration from the existing version-1 preferences shape, a non-null persisted Impostor `game` with no active-game preference resumes as Impostor for backward compatibility. If both stores contain sessions, the explicit `activeGameId` wins; an ID that points to no active session returns to home rather than guessing or clearing either store.
-
-### Error behavior
-
-- Invalid setup stays on setup with field-level/summary errors and preserves draft values.
-- A selected pack deleted before submit falls back to no selection and asks the user to choose again; it does not silently choose another pack.
-- A pack with fewer than two unique usable words cannot start.
-- Clipboard/import/database failures display a recoverable status and do not clear user input.
-- Permission denial/unsupported sensors set tilt status to `unavailable` or `denied`, announce the fallback once, and continue with tap/keyboard.
-- An outcome after expiry ends the turn without recording that word.
-- A corrupted persisted Charades payload is discarded through a versioned migration/merge and returns to setup; it must not affect Impostor or packs.
-
-### Security/privacy
-
-- Treat imported JSON as data only; render words as React text and never inject HTML.
-- Keep current JSON file acceptance and validation; optionally add a reasonable file-size guard only if repository conventions add one.
-- Request sensor permission only in response to a user gesture and never persist sensor readings.
-- No network call, remote AI invocation, analytics, or new permission appears in the manifest.
-
-## 7. Contract, Schema, Migration, and Compatibility Changes
-
-### Shared pack contract
-
-Change `WordItem` to:
-
-```ts
 interface WordItem {
   word: string
   hint?: string
   hints?: string[]
+  charadesOnly?: boolean
+  category?: CharadesCategory
+  vibes?: CharadesVibe[]
+}
+
+interface CharadesSettings {
+  mode: CharadesMode
+  packId: string
+  durationSeconds: 60 | 75 | 90 | 120
+  categories: CharadesCategory[]
+  vibes: CharadesVibe[]
+  motionEnabled: boolean
+  henyoTapAnswersEnabled: boolean
+  noRepeatEnabled: boolean
+  teams?: [CharadesTeam, CharadesTeam]
+  relayRounds?: 3 | 4 | 5
 }
 ```
 
-Compatibility rules:
+`CharadesSession` owns a sanitized settings snapshot, filtered card snapshot, shuffled remaining deck, previous card key, current card/token, phase, active deadline, accepted card events, foul events, completed turn summaries, team turn counts, and completed relay rounds. It does **not** persist interval handles, audio nodes, sensor samples, permission objects, wake-lock sentinels, flash state, or DOM orientation state.
+
+### Pack eligibility and metadata
+
+`eligibleItems(pack, 'impostor')` returns items with a nonblank word, `charadesOnly !== true`, and at least one nonblank hint from `hints[]` or legacy `hint`. `eligibleItems(pack, 'charades', filters)` returns nonblank words matching active category/vibe filters.
+
+For category display only, derive a fallback without mutating storage:
+
+- `Animals` → `animal / hayop`
+- `Places` → `place / lugar`
+- `Objects` → `object / bagay`
+- otherwise → `other / iba`
+
+Built-in items should receive explicit metadata where the answer is known; custom legacy packs continue through the fallback. Vibe-less items appear when no vibe filter is selected, but do not silently match a selected vibe. Setup shows counts and prevents start when fewer than two Charades cards remain.
+
+Canonical JSON remains a `WordPack` object. Item metadata is optional:
+
+```json
+{
+  "packName": "Pinoy Party",
+  "category": "Mixed",
+  "items": [
+    {
+      "word": "Adobo",
+      "hint": "Ulam",
+      "category": "food",
+      "vibes": ["casual", "pop-culture-local"]
+    },
+    {
+      "word": "Balut",
+      "charadesOnly": true,
+      "category": "food",
+      "vibes": ["chaos-hard"]
+    }
+  ]
+}
+```
+
+The parser preserves the legacy single `hint`, modern `hints[]`, word-only, and mixed shapes. `charadesOnly: true` forces Impostor exclusion even if a hint exists. A missing hint implicitly makes that item Charades-only for eligibility but does not cause the serializer to invent `charadesOnly`.
+
+### Round and session data flow
+
+1. Setup loads shared packs, computes compatibility/counts, applies category/vibe pills, validates mode-specific settings, and snapshots eligible items.
+2. Starting a session sets `activeGameId = 'charades'`, builds a randomized unseen deck, derives the first holder/team, and enters `GET_READY`.
+3. The Start gesture initializes/resumes audio, requests orientation permission when enabled, requests wake/orientation services, and begins a three-second countdown. The first second collects calibration samples.
+4. On countdown completion, `beginTurn(now)` assigns the first card/token and sets `deadlineMs = now + durationSeconds * 1000`.
+5. Tap, keyboard, or tilt calls `submitOutcome(outcome, token, now)`. The store reconciles expiry, records one card event, updates score, records the word in no-repeat history, and advances to a new token/card.
+6. Henyo answer buttons call `playHenyoAnswer(answer)` outside the scoring domain. `applyFoul(now)` reconciles time, records a penalty event, subtracts 5000 ms, and keeps the current card/token unless time reaches zero.
+7. A visual interval derives remaining seconds from the deadline. `visibilitychange`, focus, `pageshow`, and hydration call `syncClock(now)`. Zero moves to `ROUND_SUMMARY` exactly once.
+8. Summary lists every card in order: green/check for correct, muted/struck for pass, plus foul entries and score. Selecting a row expands/reveals the word without changing its result.
+9. Non-relay modes may start another holder round or exit. Relay advances to the other team/derived member; after both teams complete the configured number of rounds, it enters `SESSION_SUMMARY` with cumulative scores and ties preserved.
+
+### Input recognizer
+
+Implement a pure state machine independent of React:
+
+- Calibration: collect finite normalized tilt samples for 1000 ms; require a minimum count and acceptable spread; baseline is the median.
+- Armed: ignore deltas inside the deadzone. A correct/pass threshold must be held for a short dwell before one event emits.
+- Latched: emit nothing while held. Re-arm only after returning inside a smaller neutral threshold for the configured dwell/cooldown.
+- Rotation: convert beta/gamma to a screen-relative forward/back delta using the current orientation angle. Reset and recalibrate after a screen-orientation change during Get Ready; during an active turn, disable motion with a status instead of recalibrating over live play.
+- Failure: permission denied, missing samples, unstable calibration, or unsupported API leaves tap/keyboard active and displays the reason.
+
+Thresholds, dwell times, and direction signs stay in one configuration object so physical QA can tune the adapter without touching score/domain code.
+
+### Device services and feedback
+
+- `wakeLock.ts`: `acquire`, `release`, and visible-active reacquisition; hold at most one sentinel.
+- `orientationLock.ts`: attempt `screen.orientation.lock('landscape')`; on rejection show a rotate hint and continue. Call `unlock()` on exit. Do not change the manifest from `orientation: 'any'` because setup/recap must support portrait and the standard permits user-agent preconditions.
+- `audioSynth.ts`: lazily own one `AudioContext`; synthesize distinct correct, pass, yes, no, maybe, foul, and countdown envelopes with Oscillator/Gain nodes; schedule nothing after cleanup.
+- `haptics.ts`: guarded `navigator.vibrate(35)` for correct and `[30, 45, 30]` for pass; no-op when disabled/unsupported.
+- visual overlay: one short non-strobing state (`correct` or `pass`) plus live text/icon; clear on timer/unmount and respect reduced-effects styling.
+- countdown audio: emit once per integer transition from 10 through 1, not on every render/interval tick.
 
-- Charades-compatible: at least two unique, nonblank `word` values.
-- Impostor-compatible: Charades-compatible and every item has at least one nonblank normalized hint from `hints[]` or `hint`.
-- Existing records need no Dexie migration because the table key/index shape is unchanged.
-- Existing canonical JSON remains valid. New canonical word-only JSON uses `items: [{ "word": "Example" }]`.
-- Fallback `{words, hints}` remains supported for Impostor-compatible imports; add `{words}` only if it maps unambiguously to word-only canonical items and is documented/tested.
-- Serialization must omit `hint`/`hints` for a word-only item instead of emitting empty strings.
+### Persistence, migration, and recovery
 
-### Persisted Charades store
+- New `moldyparty-charades` Zustand key, version 1. Persist only validated serializable setup/session state.
+- New `moldyparty-app` key, version 1, for `activeGameId`. If it is absent and a legacy active Impostor game exists, infer Impostor. If it points to no recoverable game, return home with a recovery notice; never delete the other store automatically.
+- Extend `moldyparty-preferences` to version 2 with sound/haptics defaults while preserving `defaultDiscussionSeconds` and `installPromptDismissed`.
+- New `moldyparty-charades-history` localStorage value, version 1. Normalize and bound entries per pack; ignore corrupt/unknown values; provide Reset.
+- No Dexie version change: optional fields are inside stored values and are not indexed.
+- On active-turn recovery, reconcile the absolute deadline immediately. If expired, show the saved round summary. Never restart a full timer silently.
+
+### Error behavior
 
-- New localStorage key: `moldyparty-charades`.
-- Version: `1`.
-- Persist settings draft and session snapshot; omit sensor status, interval state, and input lock.
-- Hydration recalculates deadline status from `Date.now()` and normalizes the active screen to summary if expired.
-- Impostor's `moldyparty-game` and preferences keys are unchanged.
+- Invalid setup remains in place with field/summary errors and preserved draft data.
+- A deleted/changed pack invalidates selection and asks for a new choice; it never silently switches packs.
+- Fewer than two eligible filtered words disables Start and shows which filters caused the shortage.
+- Optional API errors become non-blocking status text; tap controls remain visible and active.
+- An outcome at/after deadline is rejected and the round ends. A stale token or non-active phase is a no-op.
+- A foul at five seconds or less ends the round with zero remaining; it never makes time negative.
+- Audio/vibration exceptions are swallowed after updating capability status; they cannot interrupt scoring.
+- Corrupt persisted Charades data is quarantined to a safe setup/home state without modifying Impostor sessions or packs.
 
-### App routing preference migration
+## 6. Contract, Schema, Migration, and Compatibility Changes
 
-- Keep the existing `moldyparty-preferences` key and migrate its persisted version from `1` to `2`.
-- Add `activeGameId: GameId | null`, default `null`.
-- Preserve `defaultDiscussionSeconds` and `installPromptDismissed` exactly during migration.
-- Existing saved Impostor games without this field resume through the explicit backward-compatibility fallback above.
+### Modified contracts
 
-### No dependency or backend migration
+- `WordItem.hint: string` → `hint?: string`.
+- Add optional `charadesOnly`, `category`, and `vibes` to `WordItem`.
+- Add `GameId` and Charades-specific types, preferably in new focused files rather than expanding all Impostor types in `types.ts`.
+- `buildAiPackPrompt(topic)` becomes an options-based API while retaining an Impostor-default overload or updating every discovered caller/test atomically.
+- Pack selection accepts a `gameId`/eligibility result instead of assuming all pack items are usable.
 
-Use browser `DeviceOrientationEvent` feature detection and existing dependencies. Do not add a sensor library, backend schema, auth scope, service worker route, or IndexedDB table unless implementation evidence proves the native adapter insufficient.
+### Compatibility rules
 
-## 8. File Ownership Map
+- Existing built-in and custom hinted packs remain byte-shape compatible and usable by both games.
+- Existing single-hint and multi-hint imports remain valid.
+- Word-only items become valid Charades data but are excluded from Impostor.
+- Mixed packs are filtered per item; do not reject the whole pack because one entry is Charades-only.
+- Existing Dexie data needs no migration. Parser/serializer and runtime normalizers are forward readers for new optional fields.
+- Import rejects unknown category/vibe values with item-indexed errors rather than silently dropping metadata.
+- Export omits absent optional fields and preserves present arrays/flags.
 
-### Create
+### Rollback constraint
 
-- `src/features/packs/packCompatibility.ts` — centralized game eligibility.
-- `src/features/packs/packCompatibility.test.ts` — legacy/new pack matrix.
-- `src/features/packs/bulkWords.ts` and `.test.ts` — line parser/count/validation for 50+ entry.
-- `src/features/charades/types.ts` — Charades-only contracts.
-- `src/features/charades/domain.ts` and `.test.ts` — pure session, queue, scoring, ranking, and timer transitions.
-- `src/store/charadesStore.ts` and `.test.ts` — commands, injected clock/randomness, persistence, hydration.
-- `src/features/charades/CharadesSetupScreen.tsx`.
-- `src/features/charades/CharadesHandoffScreen.tsx`.
-- `src/features/charades/CharadesPlayScreen.tsx`.
-- `src/features/charades/CharadesTurnSummaryScreen.tsx`.
-- `src/features/charades/CharadesFinalScoreScreen.tsx`.
-- `src/features/charades/orientationInput.ts` and `.test.ts` — permission/capability and gesture state machine.
-- `src/features/charades/CharadesFlow.test.tsx`.
-- `e2e/charades-flow.spec.ts`.
+Once any hintless/Charades-only item is written, the optional-hint reader and Impostor eligibility filter are durable compatibility infrastructure. They must survive a UI rollback until affected records are migrated or removed with explicit user consent.
 
-### Modify
+## 7. File Ownership Map
 
-- `src/domain/types.ts` — optional hint contract and shared game identifier if used.
-- `src/domain/game.ts` / `.test.ts` — guard Impostor round creation against ineligible packs.
-- `src/features/packs/packParser.ts` / `.test.ts` — word-only canonical parsing and lossless export.
-- `src/features/packs/PackManager.tsx` / `.test.tsx` — game-aware editor, compatibility badges, bulk input.
-- `src/features/packs/aiPrompt.ts` and `AiPromptHelper.tsx` / tests — Charades prompt mode with 50 words.
-- `src/features/game/LobbyScreen.tsx` and `GameFlow.test.tsx` — filter Impostor packs.
-- `src/store/preferencesStore.ts` and a new focused test file if required — active-game routing preference and version migration.
-- `src/App.tsx` / `App.test.tsx` — second card and route orchestration.
-- `src/styles.css` — two-card home, setup, full-screen play zones, summaries, mobile/safe-area states.
-- `e2e/offline.spec.ts` — shared word-only pack persistence/offline use.
-- `README.md` — game flow, controls, schema, settings, permissions, offline recovery.
-- `docs/superpowers/specs/2026-11-02-moldyparty-design.md` — supersede the original single-game non-goal and document the shared-pack/multi-game boundary; leave the historical implementation plan unchanged.
+Create:
 
-## 9. Ordered Implementation Phases
+- `src/domain/packCompatibility.ts` and `.test.ts` — per-item eligibility, category fallback, filter counts.
+- `src/domain/charades.ts` and `.test.ts` — policies, validation, deck, schedule, scoring, deadline/foul transitions, summaries.
+- `src/store/appStore.ts` and `.test.ts` — active-game persistence and legacy inference.
+- `src/store/charadesStore.ts` and `.test.ts` — commands, persistence, migration, recovery, injected clock/randomness/history.
+- `src/features/charades/CharadesSetupScreen.tsx` and test — mode/cards/filters/team settings/capability copy.
+- `src/features/charades/GetReadyScreen.tsx` and test — holder handoff, permission gesture, countdown, calibration/status.
+- `src/features/charades/ActiveRoundScreen.tsx` and test — word/category/HUD/tap zones/Henyo helpers/foul/feedback.
+- `src/features/charades/RoundSummaryScreen.tsx`, `SessionSummaryScreen.tsx`, and tests — recap and relay totals/ties.
+- `src/features/charades/orientationInput.ts` and test — pure calibration/recognizer/axis normalization.
+- `src/features/charades/useCharadesDevices.ts` and test — lifecycle orchestration and cleanup.
+- `src/features/charades/wakeLock.ts`, `orientationLock.ts`, `audioSynth.ts`, `haptics.ts`, and tests — guarded browser adapters.
+- `src/features/charades/noRepeatHistory.ts` and test — bounded versioned local history.
+- `e2e/charades-flow.spec.ts` — desktop/mobile/offline and mocked capability journeys.
 
-### Task 1: Lock shared game and pack compatibility contracts
+Modify:
 
-**Files:** Modify `src/domain/types.ts`; create `src/features/packs/packCompatibility.ts` and `src/features/packs/packCompatibility.test.ts`.
+- `src/domain/types.ts`, `builtInPacks.ts`, `game.ts`, and their tests — shared metadata and safe Impostor selection.
+- `src/features/game/LobbyScreen.tsx` and `CategoryPicker.tsx` tests — Impostor compatibility counts/filtering.
+- `src/features/packs/packParser.ts`, `PackManager.tsx`, `aiPrompt.ts`, `AiPromptHelper.tsx`, and tests — mixed schema, authoring, import/export, prompt modes.
+- `src/features/packs/packDb.test.ts` — old/new record coexistence; no schema version change.
+- `src/store/preferencesStore.ts` and tests — feedback preference migration.
+- `src/App.tsx`, `App.test.tsx`, and `styles.css` — routing, launch card, active screens, mobile layouts, feedback.
+- `e2e/offline.spec.ts` — shared pack and recovered Charades offline path.
+- `README.md` and the living product design — new game, schema, controls, permissions, offline behavior.
 
-**Interfaces:** Produce `type GameId = 'impostor' | 'charades'`, `getUsableHints(item: WordItem): string[]`, `isPackUsableFor(pack: WordPack, game: GameId): boolean`, and an optional display helper returning compatibility badges.
+Do not modify `vite.config.ts` unless implementation evidence proves a manifest/build change is necessary. The current precache glob covers generated code, and `orientation: 'any'` is intentional outside active play.
 
-- [ ] **Step 1:** Write failing tests proving legacy single-hint and `hints[]` packs support both games, word-only packs support only Charades, blank/duplicate words fail both, and a one-word pack fails Charades.
-- [ ] **Step 2:** Run `npm run test:run -- src/features/packs/packCompatibility.test.ts`; expect failure because the module/types do not exist.
-- [ ] **Step 3:** Make `WordItem.hint` optional and implement normalization/eligibility in one module; do not change built-in records.
-- [ ] **Step 4:** Run the focused test plus `npm run test:run -- src/domain/game.test.ts`; expect both to pass or expose compile sites that assumed `hint` was required.
-- [ ] **Step 5:** Commit the independently reviewable compatibility contract with message `feat: define shared pack compatibility`.
+## 8. Ordered Implementation Phases
 
-### Task 2: Protect Impostor from word-only packs
+Each phase begins with failing tests for its contract and ends with the named focused tests. Do not enable hintless writes before Phase 1 is complete.
 
-**Files:** Modify `src/domain/game.ts`, `src/domain/game.test.ts`, `src/features/game/LobbyScreen.tsx`, and `src/features/game/GameFlow.test.tsx`.
+### Phase 0 — Reconfirm baseline and lock decisions
 
-**Interfaces:** `validateSetup(input)` returns a useful error when `input.pack` is not Impostor-compatible; Lobby derives `impostorPacks = packs.filter(isPackUsableFor(...))`.
+**Owners:** current test suite, this plan, product acceptance criteria.
 
-- [ ] **Step 1:** Add failing domain tests for a word-only pack and a mixed hinted/word-only pack; assert no round is created.
-- [ ] **Step 2:** Add a failing component test with a word-only custom pack; assert it is not offered in the Impostor category picker.
-- [ ] **Step 3:** Run both focused suites and confirm the new expectations fail against current direct pack use.
-- [ ] **Step 4:** Add the centralized validation/filter without duplicating hint checks in the component.
-- [ ] **Step 5:** Run `npm run test:run -- src/domain/game.test.ts src/features/game/GameFlow.test.tsx`; expect PASS, then commit `fix: filter packs incompatible with impostor`.
+1. Run `npm run test:run` and `npm run lint`; record current counts.
+2. Confirm no product/schema changes landed since this plan's evidence lines.
+3. Preserve the assumptions in Section 1 unless product explicitly changes relay round semantics, duration choices, or feedback defaults.
 
-### Task 3: Extend JSON parsing and export without breaking legacy packs
+### Phase 1 — Shared pack safety before new writers
 
-**Files:** Modify `src/features/packs/packParser.ts` and `src/features/packs/packParser.test.ts`.
+**Owners:** `types.ts`, `packCompatibility.ts`, `game.ts`, Impostor lobby/category picker, their tests.
 
-**Interfaces:** Preserve `parseWordPackJson(text): ParseResult` and `serializeWordPack(pack): string`; extend canonical items to allow `{word}` and preserve optional hints on export.
+1. Add mixed-pack fixtures: legacy hint, `hints[]`, hintless, explicitly Charades-only with hint, tagged, invalid metadata.
+2. Implement compatibility helpers and test per-item filtering/counts.
+3. Update `createRound` and validation so Impostor selects only eligible items and returns a user error when none remain.
+4. Filter/count packs in the Impostor picker and revalidate at submit time.
+5. Run domain, lobby, game-store, and full Impostor regression tests.
 
-- [ ] **Step 1:** Add failing tests for 50 word-only canonical items, mixed invalid empty hints, duplicate normalization, legacy fallback arrays, and word-only round-trip serialization.
-- [ ] **Step 2:** Run `npm run test:run -- src/features/packs/packParser.test.ts`; expect failures only in new word-only cases.
-- [ ] **Step 3:** Refactor `normalizeItems` to validate the word first, normalize only supplied hints, and reject supplied-but-empty hint containers while allowing omitted hints.
-- [ ] **Step 4:** Update serialization to omit absent hints and prove existing one-hint/five-hint output remains byte-shape compatible.
-- [ ] **Step 5:** Run parser and repository suites; expect PASS, then commit `feat: support word-only shared packs`.
+### Phase 2 — Parser, storage, authoring, and AI prompt contracts
 
-### Task 4: Add performant 50+ bulk-word authoring
+**Owners:** pack parser/serializer, Pack Manager, Dexie repository tests, prompt helper, README schema.
 
-**Files:** Create `src/features/packs/bulkWords.ts` and `.test.ts`; modify `PackManager.tsx` and `PackManager.test.tsx`.
+1. Test round-trip preservation for every legacy/new/mixed item shape and item-indexed invalid metadata.
+2. Accept optional metadata and hintless items; omit absent fields on export.
+3. Add compatibility badges/counts and a Charades bulk-entry path with default category/vibes/`charadesOnly`; retain the hinted Impostor editor.
+4. Add AI prompt options: Impostor keeps 25 hinted items; Charades requests exactly 50 unique items with valid categories/vibes; Henyo emphasizes concrete nouns and categories.
+5. Prove Dexie v1 stores and lists old/new packs without an upgrade.
 
-**Interfaces:** Produce `parseBulkWords(text): { items: WordItem[]; errors: BulkWordError[] }`; add `purpose: GameId` to `PackManagerProps` with backward-compatible default `'impostor'` if needed during transition.
+### Phase 3 — Pure Charades engine and no-repeat policy
 
-- [ ] **Step 1:** Write parser tests for CRLF/LF input, trimmed lines, blank lines, case-insensitive duplicates with line numbers, Unicode words, and 60 valid lines.
-- [ ] **Step 2:** Write component tests asserting live count, preserved text on error, save of 50 word-only items, edit-in-place ID preservation, and “50+ recommended” copy without a hard limit.
-- [ ] **Step 3:** Run the two focused suites and confirm missing bulk-editor failures.
-- [ ] **Step 4:** Implement a Charades tab/mode using one textarea; parse on count/update efficiently and reuse `repository.put` for persistence.
-- [ ] **Step 5:** Keep the current hinted row editor available for Impostor-compatible packs and allow a word-only pack to be upgraded by adding hints later.
-- [ ] **Step 6:** Run focused tests and a component performance sanity check with 200 lines; expect no per-word controlled input rows, then commit `feat: add bulk charades pack editor`.
+**Owners:** `charades.ts`, `noRepeatHistory.ts`, unit tests.
 
-### Task 5: Make the AI prompt helper game-aware
+1. Test every mode policy/default/validation branch.
+2. Test filtered deck construction, deterministic shuffle, no-repeat selection, subset exhaustion, previous-word avoidance, corruption, Reset, and history bounds.
+3. Test Classic/One-Word/Henyo round transitions, deadline rejection, correct/pass events, five-second foul, and summary order.
+4. Test Team Relay alternation, derived holder rotation, 3/4/5 round completion, cumulative scores, and ties.
+5. Keep all browser globals out of the pure domain.
 
-**Files:** Modify `src/features/packs/aiPrompt.ts`, `AiPromptHelper.tsx`, and `AiPromptHelper.test.tsx`.
+### Phase 4 — Persisted stores and app routing
 
-**Interfaces:** Replace or overload `buildAiPackPrompt(topic, game: GameId): string`; Impostor output remains 25 items with five hints, Charades output requests exactly 50 unique word-only items.
+**Owners:** `charadesStore.ts`, `appStore.ts`, `preferencesStore.ts`, `App.tsx`, store/app tests.
 
-- [ ] **Step 1:** Add failing prompt tests for both modes, exact item counts in instructions, canonical JSON shapes, no markdown, and topic fallback.
-- [ ] **Step 2:** Add a failing component test showing the active game purpose controls copied text.
-- [ ] **Step 3:** Run the focused suite and verify the Charades case fails while existing Impostor assertions remain meaningful.
-- [ ] **Step 4:** Implement game-specific prompt builders behind one UI, retaining clipboard status/error handling.
-- [ ] **Step 5:** Run the focused and full suites; expect PASS, then commit `feat: generate fifty-word charades prompts`.
+1. Implement injected clock/random/history dependencies and the token-guarded command surface.
+2. Test active deadline hydration before/during/after expiry and exactly-once summary transition.
+3. Add active-game routing, legacy Impostor inference, invalid-pointer recovery, and explicit exit behavior.
+4. Migrate feedback preferences without losing existing values.
+5. Prove Charades state mutations cannot modify Impostor sessions and vice versa.
 
-### Task 6: Define pure Charades setup, queue, scoring, and ranking rules
+### Phase 5 — Input and device adapters
 
-**Files:** Create `src/features/charades/types.ts`, `domain.ts`, and `domain.test.ts`.
+**Owners:** orientation recognizer, wake/orientation services, audio synth, haptics, device hook, unit tests.
 
-**Interfaces:** Produce `validateCharadesSettings(settings): string[]`, `createCharadesSession(settings, random): CharadesSession`, `beginCharadesTurn(session, now): CharadesSession`, `applyCharadesOutcome(session, outcome, token, now, random): CharadesSession`, `finishCharadesTurn(session, now): CharadesSession`, `advanceAfterSummary(session): CharadesSession`, and `rankParticipants(summaries): RankedParticipant[]`.
+1. Test calibration sample quality, median baseline, 0/90/180/270-degree normalization, both gestures, deadzone, dwell, latch, neutral re-arm, and rotation failure.
+2. Test permission granted/denied/unsupported and listener cleanup.
+3. Test wake lock single-sentinel behavior, visible-active reacquisition, automatic release, rejection, and cleanup.
+4. Test orientation lock rejection/fallback and unlock.
+5. Test user-gesture AudioContext initialization, distinct cue scheduling, 10-to-1 deduplication, Sound off, cleanup, and exceptions.
+6. Test haptic patterns and unsupported/disabled no-ops.
 
-- [ ] **Step 1:** Write failing validation tests for two unique names, participant labels, duration bounds, modifier bounds/null state, and at least two compatible words.
-- [ ] **Step 2:** Write failing deterministic queue tests for shuffle, no replacement across participants, refill after exhaustion, and no immediate repeat for packs larger than one.
-- [ ] **Step 3:** Write failing outcome tests for `+bonus`, `-penalty`, floor at zero, one point only for correct, stale token rejection, and event rejection at/after deadline.
-- [ ] **Step 4:** Write failing flow/ranking tests covering every phase, all participants taking one turn, stable tied ranks, and replay setup preservation.
-- [ ] **Step 5:** Run the focused suite and confirm module-not-found failures.
-- [ ] **Step 6:** Implement immutable pure transitions with injected clock values/randomness and no browser/React imports.
-- [ ] **Step 7:** Run the focused suite; expect PASS, then commit `feat: add pure charades game rules`.
+### Phase 6 — Screens and mobile ergonomics
 
-### Task 7: Add isolated Charades persistence and deadline recovery
+**Owners:** Charades setup/Get Ready/active/summary screens and `styles.css`.
 
-**Files:** Create `src/store/charadesStore.ts` and `src/store/charadesStore.test.ts`.
+1. Build setup with mode cards, compatible pack counts, category/vibe pills, duration options, motion/no-repeat/feedback controls, and relay team/member editor.
+2. Build Get Ready with named holder/team, Start gesture, 3-second countdown, first-second calibration, device status, and tap-fallback message.
+3. Build edge-to-edge active UI with `clamp()` word sizing, safe areas, timer/category HUD, semantic left/right buttons, keyboard mapping, and non-blocking portrait prompt.
+4. Add Henyo bilingual answer buttons/chimes and foul control with propagation tests.
+5. Add correct/pass overlays, haptics/audio calls, and accessible live text without color-only meaning.
+6. Build ordered round recap and relay scoreboard; word rows expand on tap without mutating results.
+7. Test long multi-word phrases, reduced effects, focus order, screen-reader labels, and 320px portrait fallback.
 
-**Interfaces:** Produce `createCharadesStore(storageName?, random?, storage?, clock?)`, `useCharadesStore(selector)`, and actions `saveDraft`, `startSession`, `beginTurn`, `submitOutcome`, `syncTimer`, `finishTurn`, `continueFromSummary`, `playAgain`, and `returnToSetup`.
+### Phase 7 — Integration, offline behavior, and regression
 
-- [ ] **Step 1:** Write failing store tests for setup→handoff→active→summary→next participant→final transitions using injected clock/randomness.
-- [ ] **Step 2:** Add failing tests proving tap/tilt-equivalent calls with the same word token record one event, and calls after expiry record none.
-- [ ] **Step 3:** Add failing persistence tests for separate key/version, active deadline hydration, expired hydration to summary, corrupted payload fallback, and no interaction with `moldyparty-game`.
-- [ ] **Step 4:** Run the focused suite and confirm missing-store failures.
-- [ ] **Step 5:** Implement a versioned persisted slice that omits transient sensor/input state and reconciles with the injected clock on merge/hydration.
-- [ ] **Step 6:** Run store plus existing Impostor store tests; expect PASS, then commit `feat: persist charades sessions safely`.
+**Owners:** `App.tsx`, PWA/offline flow, E2E suites, README/design docs.
 
-### Task 8: Build Charades setup and pack-library routing
+1. Add the home card and context-aware pack manager return routes.
+2. Add desktop/mobile E2E for each mode, mixed packs, filters, tap fallback, relay completion, recap, refresh recovery, and mocked denied capabilities.
+3. Extend offline E2E: install/build once, disable network, open Charades, use an existing/shared custom pack, recover state, and finish a round.
+4. Run `npm run test:run`, `npm run lint`, `npm run build`, then `npm run e2e`.
+5. Inspect the generated service worker/precache and verify no MP3/media assets or unexpected dependency chunks were introduced.
+6. Update README and the living product design only after behavior is verified.
 
-**Files:** Create `CharadesSetupScreen.tsx`; modify `src/App.tsx`, `App.test.tsx`, `PackManager.tsx`, `src/store/preferencesStore.ts`, its tests, and `src/styles.css`.
+### Phase 8 — Physical-device release gate
 
-**Interfaces:** App routes `home`, `impostor-setup`, `charades-setup`, and `packs` with a remembered pack-library return context; setup consumes Charades store draft/actions and shared pack repository.
+**Owners:** release QA notes; no automated substitute.
 
-- [ ] **Step 1:** Add failing app-shell tests for two launch cards with unique accessible headings/actions.
-- [ ] **Step 2:** Add failing setup tests for player/team labels, name editing, duration, independent modifier toggles, tilt toggle, compatible pack selection, and validation preservation.
-- [ ] **Step 3:** Add failing preference/navigation tests proving version-1 preferences migrate without data loss, starting either game sets `activeGameId`, and Charades setup → pack manager → back returns to Charades with the draft intact.
-- [ ] **Step 4:** Run the focused component tests and confirm missing route/screen failures.
-- [ ] **Step 5:** Implement the setup, version-2 active-game preference, and explicit return context; do not reuse Impostor's `LobbyDraft` or mutate the other game's store state.
-- [ ] **Step 6:** Extend the existing card/layout styles responsively and run App/Impostor/PackManager tests; expect PASS, then commit `feat: add charades setup entry point`.
+1. Run the matrix in Section 10 on current iOS Safari/browser and added-to-home-screen mode, plus Android Chrome/browser and installed PWA.
+2. Tune only isolated orientation thresholds/sign mappings if evidence requires it; rerun recognizer tests.
+3. Record unsupported capabilities and fallback behavior in release notes.
+4. Do not call motion/orientation production-ready until the physical matrix passes; tap-only release remains viable.
 
-### Task 9: Implement and test the orientation gesture adapter
+## 9. Verification Matrix and Acceptance Criteria
 
-**Files:** Create `src/features/charades/orientationInput.ts` and `.test.ts`.
-
-**Interfaces:** Produce `requestOrientationPermission(): Promise<OrientationPermissionStatus>` and a pure `createTiltRecognizer(config)` that accepts relative samples and emits at most one semantic outcome until neutral reset.
-
-Default recognizer constants: threshold `25°`, neutral band `12°`, dwell `200ms`; down emits `correct`, up emits `pass`. Calibration uses the first stable sample after the active screen begins.
-
-- [ ] **Step 1:** Write failing permission tests for unsupported API, no permission method, granted, denied, rejected promise, and secure-context limitations represented by adapter inputs.
-- [ ] **Step 2:** Write failing recognizer tests for calibration, noisy sub-threshold motion, threshold+dwell, correct/pass direction, held-tilt suppression, neutral re-arm, and cleanup.
-- [ ] **Step 3:** Run the focused suite and confirm missing-adapter failures.
-- [ ] **Step 4:** Implement the browser boundary behind injectable functions/types so tests do not depend on jsdom sensor support.
-- [ ] **Step 5:** Run the focused suite; expect PASS, then commit `feat: add optional tilt recognition`.
-
-### Task 10: Build handoff and active-turn controls
-
-**Files:** Create `CharadesHandoffScreen.tsx`, `CharadesPlayScreen.tsx`, and extend `CharadesFlow.test.tsx` / `src/styles.css`.
-
-**Interfaces:** Handoff requests permission from **Start turn** when appropriate. Play screen maps right tap/`ArrowRight`/tilt-down to `correct` and left tap/`ArrowLeft`/tilt-up to `pass`, passing the visible word token to the store.
-
-- [ ] **Step 1:** Write failing interaction tests for handoff copy using player/team labels, permission granted/denied/unavailable, and turn start regardless of sensor outcome.
-- [ ] **Step 2:** Write failing tests for left/right tap zones, keyboard arrows, visible word advancement, correct/pass counts, and accessible control names.
-- [ ] **Step 3:** Add a failing race test dispatching two inputs for one token; assert one event and one word advance.
-- [ ] **Step 4:** Add a failing cleanup test proving orientation listeners are removed on summary/unmount and no further event is recorded.
-- [ ] **Step 5:** Implement the full-screen play surface, persistent tap affordances, tilt status, timer visual, safe-area layout, and reduced-motion behavior.
-- [ ] **Step 6:** Run Charades flow and existing game flow tests; expect PASS, then commit `feat: add charades handoff and play controls`.
-
-### Task 11: Reconcile the visual timer across background and lifecycle events
-
-**Files:** Modify `CharadesPlayScreen.tsx`, `charadesStore.ts`, their tests, and optionally create a focused `useCharadesTimer.ts` only if it clarifies ownership.
-
-**Interfaces:** UI calls `syncTimer()` on a visual interval and on `visibilitychange`, `pageshow`, and window focus; store/domain remains authoritative for expiry.
-
-- [ ] **Step 1:** Add fake-timer tests for second-boundary display, bonus extension, penalty expiry, background elapsed time, and exactly-once summary transition.
-- [ ] **Step 2:** Add a failing component test ensuring the timer is not announced to assistive technology every second while final expiry is announced.
-- [ ] **Step 3:** Run focused tests and confirm lifecycle reconciliation gaps.
-- [ ] **Step 4:** Implement lifecycle listeners with cleanup and derive display from deadline rather than trusting interval tick counts.
-- [ ] **Step 5:** Run store/flow tests; expect PASS, then commit `fix: reconcile charades turn deadlines`.
-
-### Task 12: Build turn summary, next handoff, and final scoreboard
-
-**Files:** Create `CharadesTurnSummaryScreen.tsx`, `CharadesFinalScoreScreen.tsx`, and extend `CharadesFlow.test.tsx` / `src/styles.css`.
-
-**Interfaces:** Summary consumes immutable turn events and exposes only `continueFromSummary`; final score consumes ranked summaries and exposes `playAgain`, `changeSettings`, and `returnHome` routing callbacks.
-
-- [ ] **Step 1:** Write failing summary tests for separated correct/pass lists, empty lists, score, `+N`/`−N` time annotations, and next participant copy.
-- [ ] **Step 2:** Write failing final tests for ranking, ties, player/team terminology, total correct/pass counts, and every navigation action.
-- [ ] **Step 3:** Run focused tests and confirm missing-screen failures.
-- [ ] **Step 4:** Implement semantic lists/tables and explicit pass-device actions; never auto-start the next turn.
-- [ ] **Step 5:** Run Charades flow tests; expect PASS, then commit `feat: add charades summaries and scoreboard`.
-
-### Task 13: Complete app orchestration and regression coverage
-
-**Files:** Modify `src/App.tsx`, `App.test.tsx`, `GameFlow.test.tsx`, and `styles.css`.
-
-**Interfaces:** `AppContent` renders exactly one active game phase, preserves each game's setup independently, and returns home without deleting saved packs.
-
-- [ ] **Step 1:** Add a failing integration test completing a two-participant session through final score using taps only.
-- [ ] **Step 2:** Add failing regression tests proving a legacy in-progress Impostor game resumes when no active-game preference exists, explicit `activeGameId` wins when both sessions exist, and an ID with no matching session returns home without clearing either store.
-- [ ] **Step 3:** Run App, Impostor, and Charades component suites and confirm orchestration failures.
-- [ ] **Step 4:** Refactor route selection into a small explicit owner if `App.tsx` becomes ambiguous; avoid merging the two game phase unions.
-- [ ] **Step 5:** Run all unit/component tests; expect PASS, then commit `feat: integrate forehead charades`.
-
-### Task 14: Add mobile, offline, and pack-sharing end-to-end journeys
-
-**Files:** Create `e2e/charades-flow.spec.ts`; modify `e2e/offline.spec.ts` and possibly `playwright.config.ts` only for deterministic permission stubs.
-
-**Interfaces:** Verify the shipped production build using tap controls; sensor gesture correctness remains unit-tested and physically QA'd.
-
-- [ ] **Step 1:** Add an E2E journey that creates/imports a 50-word word-only pack, selects it in Charades, completes two timed turns with correct/pass taps, reviews summaries, and reaches final score.
-- [ ] **Step 2:** Assert the same word-only pack is absent from Impostor selection while a legacy hinted Impostor pack is present in both games.
-- [ ] **Step 3:** Add an offline reload journey proving the shared pack and Charades setup/session remain usable from the service worker cache.
-- [ ] **Step 4:** Run `npm run build && npm run e2e`; expect all desktop/mobile Chromium projects to pass.
-- [ ] **Step 5:** Commit `test: cover charades mobile and offline flows`.
-
-### Task 15: Document, verify, and prepare rollout
-
-**Files:** Modify `README.md` and `docs/superpowers/specs/2026-11-02-moldyparty-design.md`; verify generated build artifacts without committing `dist/`.
-
-**Interfaces:** Documentation describes both games, shared/word-only schemas, 50+ authoring, settings, tap/keyboard/tilt controls, sensor fallback, recovery, and local-data limitations.
-
-- [ ] **Step 1:** Update README examples for hinted and word-only canonical packs and explain that word-only packs are Charades-only until hints are added.
-- [ ] **Step 2:** Document exact settings bounds/defaults, session flow, tilt permission/fallback, and the recommendation of 50+ words.
-- [ ] **Step 3:** Update the living design document to replace the single-game non-goal with the shared-pack, isolated-game-state architecture; do not rewrite the historical implementation plan.
-- [ ] **Step 4:** Run `npm run lint`; expect exit code 0 with no warnings.
-- [ ] **Step 5:** Run `npm run test:run`; expect all old and new tests to pass.
-- [ ] **Step 6:** Run `npm run build`; inspect `dist/manifest.webmanifest` and generated service worker output, expecting the existing install metadata and new chunks in precache.
-- [ ] **Step 7:** Run `npm run e2e`; expect desktop and mobile projects to pass.
-- [ ] **Step 8:** Perform the real-device matrix in Section 11, record results in the pull request/release notes, then commit `docs: explain forehead charades`.
-
-## 10. Verification Matrix and Acceptance Criteria
-
-| Requirement | Automated evidence | Acceptance criterion |
+| Requirement | Evidence | Acceptance criterion |
 |---|---|---|
-| Shared existing Impostor packs | Compatibility unit test + Charades setup component/E2E | Every current built-in/custom hinted pack is selectable without creating a copy. |
-| 50+ custom words | Bulk parser/component test at 50 and 200 lines + E2E at 50 | Save, edit, export, reload, and select 50+ unique words; no hard maximum is imposed. |
-| Impostor safety | Domain/component compatibility tests | Word-only packs never appear/select in Impostor and cannot create an Impostor round. |
-| Per player/team timing | Domain/store/component tests | Each named entry receives one turn using the configured 10–600 second base duration. |
-| Optional correct bonus | Domain fake-clock test | Disabled produces `0`; enabled adds configured seconds and records the delta. |
-| Optional pass penalty | Domain fake-clock test | Disabled produces `0`; enabled subtracts configured seconds, floors at zero, and may end the turn. |
-| Tap controls | Component + mobile/desktop E2E | Right is correct, left is pass, both have accessible labels and work without sensors. |
-| Tilt controls | Pure recognizer tests + physical device QA | Down is correct, up is pass, held tilt emits once, neutral re-arms, denial falls back. |
-| Timer lifecycle | Store/component fake-clock tests | Background/refresh uses wall-clock time; expired actions are rejected; summary occurs once. |
-| Pass-device flow | Component/E2E | Summary never exposes/starts the next word; explicit handoff names the next player/team. |
-| Score/final result | Domain/component tests | Correct = 1, pass = 0, all events appear in summary, ties are represented correctly. |
-| Offline/local-first | Build + offline E2E | App shell, shared packs, and recovered Charades state work after network is disabled. |
-| Impostor regression | Existing 57 tests + updated E2E | Existing setup, reveal, discussion, voting, result, replay, pack CRUD, and offline flows still pass. |
+| Four modes | Policy/domain/component/E2E tests | Each mode exposes only its valid setup, rules, helpers, timers, and summary behavior. |
+| Classic timing | Fake clock + E2E | 60/75/90 seconds work; correct/pass advance rapidly and late inputs are rejected. |
+| Henyo | Domain/component/E2E | Fixed 2:00; category always visible; answer buttons play distinct cues; foul removes exactly 5s and never advances the card. |
+| One-Word | Component/E2E | One-word rule is clearly displayed during Get Ready/active play; core scoring remains identical to Classic. |
+| Team Relay | Domain/store/E2E | Exactly two teams alternate, members rotate deterministically, both teams play each configured round, totals/ties are correct after refresh. |
+| Tap/keyboard fallback | Component + desktop/mobile E2E | Left/ArrowLeft passes; right/ArrowRight scores; controls work with all optional APIs denied. |
+| Tilt/calibration | Pure recognizer + mocked component + physical QA | One-second stable baseline; down/up emit intended commands once; held tilt does not repeat; neutral re-arms; bad calibration falls back. |
+| Wake lock | Adapter tests + physical QA | Requested only during ready/active play, reacquired after visible return, released on exit, and failure is non-blocking. |
+| Landscape/typography | Responsive tests + physical QA | Best-effort lock; clear rotate hint on failure; active play still usable in portrait; long phrases remain legible in landscape. |
+| Audio | Adapter/component tests + physical QA | No asset/network request; user-gesture unlock; distinct cues; countdown ticks once per second from 10; Sound off works. |
+| Haptics/flash | Adapter/component tests + physical QA | Correct single pulse, pass double pulse when supported; short non-strobing overlays; text/icon duplicate the state. |
+| Recap | Domain/component/E2E | Every played word appears once and in order; correct is positive, pass is muted/struck; tapping reveals/expands without changing score. |
+| Shared packs | Compatibility/parser/DB/E2E | Existing hinted packs work in both games without copies; mixed items filter correctly; word-only entries never reach Impostor. |
+| Categories/vibes | Parser/filter/setup tests | Valid metadata round-trips; filter counts are accurate; Henyo fallback category is deterministic; unknown values produce indexed errors. |
+| AI hook | Prompt unit tests | Impostor prompt remains compatible; Charades/Henyo prompt requests valid 50-item tagged JSON; no remote call occurs. |
+| No repeats | Domain/history/store tests | No eligible word repeats until its active subset is exhausted; history survives reload, is bounded/resettable, and corrupt data fails safe. |
+| Timer lifecycle | Fake clock/store/component tests | Background/refresh uses wall-clock deadline; outcome/foul expiry races resolve once; no negative time. |
+| Offline/local privacy | Production build + offline E2E + source review | Full flow works offline after first load; no gameplay/sensor/pack network transmission or audio asset. |
+| Impostor regression | Existing and new tests/E2E | Current session, role, voting, statistics, pack CRUD, abort, and offline flows remain unchanged. |
 
-Feature acceptance requires all rows above plus clean lint/build results. Tilt is not accepted for production based on jsdom/Playwright alone; at least one current iOS Safari PWA/browser and one Android Chrome device must pass the physical matrix.
+Feature acceptance requires every automated row, clean lint/build, and the physical capability matrix. A tap-only fallback may ship if motion is explicitly labeled unavailable and all non-motion criteria pass; a broken or misleading tilt path may not.
 
-## 11. Rollout, Rollback, Observability, Cleanup, and Unverified Boundaries
+## 10. Rollout, Rollback, Observability, and Unverified Boundaries
 
-### Rollout
+### Rollout order
 
-1. Land shared optional-hint compatibility and Impostor filtering before enabling word-only creation.
-2. Land Charades behind its home card in the same release once unit/component/E2E checks pass.
-3. Verify update behavior from the current service worker version so existing installed users receive the new shell cleanly.
-4. Run physical QA:
-   - Android Chrome browser and installed PWA: permission/capability, portrait forehead posture, tilt directions, background/return, tap fallback.
-   - iOS Safari browser and added-to-home-screen mode: permission prompt from Start gesture, denied path, orientation axis, background/return, tap fallback.
-   - Desktop Chromium: keyboard/tap path and responsive setup/summary.
+1. Ship/readiness-review shared optional metadata plus Impostor eligibility protection before exposing hintless creation.
+2. Land the pure Charades engine/store behind the unlinked route or feature branch until device-independent tests pass.
+3. Enable the home card when all automated checks and offline production checks pass.
+4. Enable motion by default only after physical QA; otherwise default it off while retaining the tested tap game.
+
+### Physical matrix
+
+For iOS Safari browser and added-to-home-screen mode, and Android Chrome browser and installed PWA, verify:
+
+- Start-gesture permission granted, denied, dismissed, and previously decided;
+- one-second forehead-posture calibration and unstable-pose failure;
+- landscape-left and landscape-right correct/pass direction, neutral re-arm, and no held-repeat;
+- screen orientation changes before/during a round;
+- wake behavior during a full two-minute Henyo turn, page hide/return, low-power rejection where reproducible;
+- audio unlock and all Henyo/countdown cues; hardware mute expectations noted;
+- correct/pass vibration when supported and graceful absence when not;
+- helper buttons do not trigger tap zones;
+- background past deadline opens exactly one summary;
+- tap-only completion in every denied/unsupported case.
+
+Desktop Chromium verifies keyboard/tap, responsive setup/summary, and unsupported-device messaging.
 
 ### Rollback
 
-- The Charades home card, routes, screens, and `moldyparty-charades` store can be disabled/removed without touching Impostor data.
-- Do **not** roll back the optional-hint parser/serializer and Impostor compatibility filter while word-only records may exist. That compatibility slice is the safe forward reader and should remain through rollback.
-- No IndexedDB downgrade is needed because the table schema/version is unchanged.
-- Leaving the unused `moldyparty-charades` key after rollback is harmless; a later cleanup release may remove it only after explicit product approval.
+- Hide/remove the Charades home card and routes; leave the isolated Charades/app/history keys inert.
+- Retain the optional metadata parser/serializer and Impostor eligibility filter while any new-format records may exist.
+- No Dexie downgrade is required because the table version/index schema is unchanged.
+- Do not delete user packs, history, or session state during rollback without separate explicit authorization.
 
 ### Observability
 
-This local-only app has no telemetry. Operational evidence is therefore:
+This local-only app has no telemetry. Evidence comes from:
 
-- visible, accessible validation and sensor-status messages;
-- deterministic domain/store tests with injected clock/randomness;
-- production-build desktop/mobile/offline E2E;
-- real-device QA notes for permission/axis behavior; and
-- service-worker update/build inspection.
+- accessible in-app capability/calibration/error status;
+- deterministic domain/store/adapter tests with injected clock/randomness/APIs;
+- desktop/mobile/offline E2E against the production build;
+- build/service-worker inspection; and
+- dated physical-device QA notes with browser/OS/PWA mode.
 
 Do not add analytics solely for this feature.
 
 ### Cleanup
 
-- Remove any temporary duplicated eligibility checks after all consumers use `packCompatibility.ts`.
-- Ensure timers/listeners/object URLs are disposed on unmount.
-- Keep `dist/`, Playwright reports, and test results uncommitted.
-- Update the original living design document as specified in Task 15, but keep the original implementation plan historical; this feature plan remains the new feature's implementation source of truth.
+- Remove listeners, intervals, scheduled audio, wake sentinels, and flash timers on every phase exit/unmount.
+- Centralize eligibility; remove temporary direct hint checks after all consumers migrate.
+- Keep generated `dist`, Playwright reports, and test results uncommitted.
+- Bound/prune history lazily and remove a deleted pack's entry when practical; failure to clean history must never block pack deletion.
+- Update living docs after implementation; keep this plan as the decision/implementation source of truth.
 
-### Unverified boundaries / explicit implementation decisions
+### Unverified boundaries
 
-1. **Real sensor axes:** fixed thresholds/directions are recommended but must be confirmed on physical iOS/Android devices. If axes are inconsistent, adjust only the adapter/calibration contract; do not change domain/store commands.
-2. **Wake Lock:** not currently requested and browser support/permission behavior is unverified. Keep it out of scope unless physical QA shows screen sleeping is a material failure.
-3. **Maximum practical pack size:** the current parser has no cap. Tests cover 200 lines, but multi-thousand-word UX/storage behavior is unverified and not required by “50+.”
-4. **Service-worker upgrade from every historical build:** only the current repository build is available for direct verification.
-5. **PWA orientation locking:** manifest currently uses `orientation: 'any'`; do not force portrait until forehead and tabletop usage are tested on devices.
+1. Device/browser-specific tilt signs and usable thresholds remain unverified until physical QA.
+2. Screen Orientation support/preconditions and Wake Lock/Vibration behavior remain implementation-dependent; standards permit rejection or release.
+3. iOS/browser/PWA audio behavior under hardware mute and power-saving modes needs physical observation.
+4. Multi-thousand-item pack performance is outside acceptance; automated authoring/filter tests should cover at least 200 items, while the AI prompt target is 50.
+5. Upgrade behavior from every historical service-worker build cannot be proven from the current checkout; verify from the currently deployed/previous production build if one exists.
+6. Full Filipino localization is not planned; only the Henyo gameplay vocabulary/category labels are bilingual.
 
-## 12. Self-review Result
+## 11. Self-Review Result
 
-- **Spec coverage:** Core mechanic, pass-device flow, shared Impostor words, 50+ custom authoring, configurable turn time, optional correct bonus, optional pass penalty, summaries, and player/team language each map to implementation and verification tasks.
-- **Unsupported claims:** Sensor behavior and historical service-worker upgrades remain explicitly unverified; no physical behavior is claimed from browser automation.
-- **Consumer coverage:** All discovered producers/consumers of `WordItem`/`WordPack` are named, including parser, DB, both lobbies, AI helper, tests, README, and offline flow.
-- **Scope control:** No backend, speech recognition, tournament mode, telemetry, or dependency addition is included.
-- **Compatibility:** Existing records require no database migration; Impostor filtering lands before word-only writes; rollback retains the forward-compatible reader/filter.
-- **Task granularity:** Fifteen reviewable tasks contain more than 50 checkable implementation/verification steps without splitting into cosmetic microtasks.
+- **Unsupported claims:** Variable browser/device behavior is labeled unverified and tied to a physical gate; no mock test is presented as sensor proof.
+- **Consumer coverage:** Every discovered producer/consumer of `WordItem`/`WordPack`, game routing, persistence, PWA lifecycle, and tests is named.
+- **Contract safety:** Impostor filtering lands before hintless writers; runtime validation backs up picker filtering; rollback retains the forward reader.
+- **Mode clarity:** Durations, relay-round semantics, holder rotation, Henyo foul behavior, and non-enforceable speech rules are explicit rather than placeholders.
+- **Scope control:** No backend, microphone, remote AI, telemetry, extra team modes, dependencies, or global orientation lock was added.
+- **Accessibility:** Tap zones remain semantic controls; portrait fallback exists; feedback is redundant; orientation is not mandatory; reduced effects and safe areas are preserved.
+- **Operational completeness:** Recovery, offline use, cleanup, rollback, build inspection, automated tests, and physical-device QA each have an owner and acceptance evidence.
+- **Repository hygiene:** This planning artifact is the only authorized change and is not committed.

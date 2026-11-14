@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { builtInPacks } from '../../domain/builtInPacks'
 import { validateSetup } from '../../domain/game'
+import { isPackUsableFor } from '../../domain/packCompatibility'
 import type { GameSetupInput, WordPack } from '../../domain/types'
 import { packRepository } from '../packs/packDb'
 import { useGameStore } from '../../store/gameStore'
@@ -52,14 +53,17 @@ export default function LobbyScreen({ draft: savedDraft, onDraftChange, onBack, 
   const [draft, setDraft] = useState<LobbyDraft>(() => savedDraft ?? draftFromSetup(previousSetup))
   const [customPacks, setCustomPacks] = useState<WordPack[]>([])
   const [errors, setErrors] = useState<string[]>([])
-  const packs = useMemo(() => [...builtInPacks, ...customPacks], [customPacks])
+  const packs = useMemo(
+    () => [...builtInPacks, ...customPacks].filter((pack) => isPackUsableFor(pack, 'impostor')),
+    [customPacks],
+  )
 
   useEffect(() => {
     let active = true
     void packRepository.list().then((saved) => {
       if (!active) return
       setCustomPacks(saved)
-      if (preferredPackId && [...builtInPacks, ...saved].some((pack) => pack.id === preferredPackId)) {
+      if (preferredPackId && [...builtInPacks, ...saved].some((pack) => pack.id === preferredPackId && isPackUsableFor(pack, 'impostor'))) {
         setDraft((current) => {
           const next = { ...current, selectedPackId: preferredPackId }
           onDraftChange(next)

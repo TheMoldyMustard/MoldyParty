@@ -65,6 +65,16 @@ describe('validateSetup', () => {
     })).toContain('Leave at least one player as an Innocent.')
   })
 
+  it('rejects a pack with no Impostor-eligible hinted item', () => {
+    expect(validateSetup({
+      ...validSetup,
+      pack: {
+        ...validSetup.pack,
+        items: [{ word: 'Balut', charadesOnly: true }],
+      },
+    })).toContain('Choose a word pack with at least one Impostor-compatible item.')
+  })
+
   it.each([
     ['jesterEnabled', 'false'],
     ['outlierEnabled', 1],
@@ -117,6 +127,23 @@ describe('createRound', () => {
     }, () => randomValues.shift() ?? 0)
 
     expect(state.currentHint).toBe('Silver')
+  })
+
+  it('never selects a word-only or explicitly Charades-only item', () => {
+    const state = createRound({
+      ...validSetup,
+      pack: {
+        ...validSetup.pack,
+        items: [
+          { word: 'Balut' },
+          { word: 'Jeepney', hint: 'Transport', charadesOnly: true },
+          { word: 'Adobo', hint: 'Ulam' },
+        ],
+      },
+    }, () => 0)
+
+    expect(state.currentWord).toBe('Adobo')
+    expect(state.currentHint).toBe('Ulam')
   })
 
   it('assigns enabled special roles to distinct players and keeps an innocent', () => {

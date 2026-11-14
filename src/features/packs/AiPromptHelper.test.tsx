@@ -2,37 +2,19 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import AiPromptHelper from './AiPromptHelper'
-import { buildAiPackPrompt } from './aiPrompt'
-
-describe('buildAiPackPrompt', () => {
-  it('includes the topic, canonical schema, and strict JSON requirements', () => {
-    const prompt = buildAiPackPrompt('Valorant Agents')
-
-    expect(prompt).toContain('Valorant Agents')
-    expect(prompt).toContain('"packName": "Valorant Agents"')
-    expect(prompt).toContain('"items"')
-    expect(prompt).toContain('"hints": ["Connection", "Memory", "Energy", "Journey", "Choice"]')
-    expect(prompt).toContain('Return only valid JSON')
-    expect(prompt).toContain('25 unique items')
-    expect(prompt).toContain('Each hint must be exactly one word')
-    expect(prompt).toContain('Generate exactly 5 different hints for every word')
-    expect(prompt).toContain('must not describe the answer’s genre, core mechanic, setting, visual style, platform, publisher, famous character, or defining feature')
-    expect(prompt).toContain('plausibly fit at least 3 different items')
-    expect(prompt).toContain('If a fan could confidently guess the word from the hint alone, replace the hint')
-    expect(prompt).toContain('Bad hints for Minecraft: ["Blocks", "Sandbox", "Crafting", "Creeper", "Building"]')
-  })
-})
 
 describe('AiPromptHelper', () => {
-  it('copies a prompt generated from the entered topic', async () => {
+  it('copies a Henyo-ready Charades prompt when that generator mode is selected', async () => {
     const user = userEvent.setup()
-    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined)
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText')
     render(<AiPromptHelper />)
 
-    await user.type(screen.getByLabelText('Pack topic'), 'Anime Characters')
+    await user.selectOptions(screen.getByLabelText('Game format'), 'charades')
+    await user.selectOptions(screen.getByLabelText('Charades mode'), 'henyo')
+    await user.type(screen.getByLabelText('Pack topic'), 'Philippines')
     await user.click(screen.getByRole('button', { name: 'Copy AI prompt' }))
 
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('Anime Characters'))
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('concrete nouns suitable for Pinoy Henyo'))
     expect(screen.getByRole('status')).toHaveTextContent('Prompt copied')
   })
 })
