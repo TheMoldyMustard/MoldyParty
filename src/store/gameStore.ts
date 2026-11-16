@@ -520,7 +520,7 @@ export function createGameStore(
 
     confirmRole: () => set((state) => {
       if (!state.game) return state
-      const game = advanceRoleReveal(state.game)
+      const game = advanceRoleReveal(state.game, random)
       const enteredDiscussion = state.game.phase === 'ROLE_REVEAL' && game.phase === 'DISCUSSION'
       const duration = game.discussionDurationSeconds
       return enteredDiscussion ? {

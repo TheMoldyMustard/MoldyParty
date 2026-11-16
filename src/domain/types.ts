@@ -93,6 +93,7 @@ export interface GameState {
   outlierHintsEnabled: boolean
   absoluteVotingEnabled: boolean
   discussionDurationSeconds: number | null
+  discussionStarterPlayerId?: string
   currentRevealIndex: number
   isRoleVisible: boolean
   currentVoterIndex: number

@@ -291,7 +291,7 @@ describe('game store', () => {
   })
 
   it('moves from lobby through private role reveals into discussion', () => {
-    const store = createGameStore('role-flow', () => 0)
+    const store = createGameStore('role-flow', () => 0.999)
     store.getState().startGame(setup)
     expect(store.getState().game?.phase).toBe('ROLE_REVEAL')
 
@@ -304,6 +304,29 @@ describe('game store', () => {
     store.getState().confirmRole()
     store.getState().confirmRole()
     expect(store.getState().game?.phase).toBe('DISCUSSION')
+    expect(store.getState().game?.discussionStarterPlayerId).toBe('player-3')
+  })
+
+  it('hydrates a legacy discussion round without a selected starter', async () => {
+    const source = createGameStore('legacy-starter-source', () => 0, localStorage, () => 1_000, () => 'legacy-session')
+    source.getState().createSession('Legacy')
+    source.getState().startGame(setup)
+    source.getState().confirmRole(); source.getState().confirmRole(); source.getState().confirmRole()
+    const session = structuredClone(source.getState().sessionsById['legacy-session'])
+    delete (session.currentGame as typeof session.currentGame & { discussionStarterPlayerId?: string })?.discussionStarterPlayerId
+    localStorage.setItem('legacy-starter', JSON.stringify({
+      state: {
+        sessionsById: { 'legacy-session': session },
+        activeSessionId: 'legacy-session',
+      },
+      version: 4,
+    }))
+
+    const restored = createGameStore('legacy-starter', () => 0)
+    await restored.persist.rehydrate()
+
+    expect(restored.getState().game?.phase).toBe('DISCUSSION')
+    expect(restored.getState().game?.discussionStarterPlayerId).toBeUndefined()
   })
 
   it('uses a ready screen and confirmation before recording each secret vote', () => {

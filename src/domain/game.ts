@@ -124,7 +124,7 @@ export function createRound(input: GameSetupInput, random: () => number = Math.r
   }
 }
 
-export function advanceRoleReveal(state: GameState): GameState {
+export function advanceRoleReveal(state: GameState, random: () => number = Math.random): GameState {
   if (state.phase !== 'ROLE_REVEAL') {
     return state
   }
@@ -133,11 +133,16 @@ export function advanceRoleReveal(state: GameState): GameState {
     index === state.currentRevealIndex ? { ...player, hasViewedRole: true } : player,
   )
   const isLastPlayer = state.currentRevealIndex === state.players.length - 1
+  const discussionStarterPlayerId = isLastPlayer
+    ? state.discussionStarterPlayerId
+      ?? state.players[Math.min(state.players.length - 1, Math.floor(random() * state.players.length))].id
+    : undefined
 
   return {
     ...state,
     players,
     phase: isLastPlayer ? 'DISCUSSION' : 'ROLE_REVEAL',
+    ...(discussionStarterPlayerId ? { discussionStarterPlayerId } : {}),
     currentRevealIndex: isLastPlayer ? state.currentRevealIndex : state.currentRevealIndex + 1,
     isRoleVisible: false,
   }

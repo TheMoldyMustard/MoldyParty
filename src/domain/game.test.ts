@@ -203,6 +203,27 @@ describe('advanceRoleReveal', () => {
 
     expect(advanceRoleReveal(discussion)).toBe(discussion)
   })
+
+  it.each([
+    { random: 0, expectedId: 'player-1' },
+    { random: 0.999, expectedId: 'player-4' },
+  ])('selects $expectedId to start only when the final role is confirmed', ({ random, expectedId }) => {
+    let state = createRound(validSetup, () => 0)
+    let randomCalls = 0
+    const starterRandom = () => { randomCalls += 1; return random }
+
+    state = advanceRoleReveal(state, starterRandom)
+    expect(state.discussionStarterPlayerId).toBeUndefined()
+    state = advanceRoleReveal(state, starterRandom)
+    state = advanceRoleReveal(state, starterRandom)
+    expect(state.discussionStarterPlayerId).toBeUndefined()
+    expect(randomCalls).toBe(0)
+
+    state = advanceRoleReveal(state, starterRandom)
+    expect(state.discussionStarterPlayerId).toBe(expectedId)
+    expect(randomCalls).toBe(1)
+    expect(advanceRoleReveal(state, () => (random === 0 ? 0.999 : 0)).discussionStarterPlayerId).toBe(expectedId)
+  })
 })
 
 describe('built-in packs', () => {
