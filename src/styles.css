@@ -193,6 +193,7 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
 .role-card--outlier small, .role-card--outlier strong { color: #8fd8ff; }
 
 .discussion-screen, .voting-screen, .result-screen { gap: 1.4rem; }
+.discussion-starter { color: var(--lime); font-size: clamp(1.5rem, 4.5vw, 2.25rem); font-weight: 900; line-height: 1.05; letter-spacing: -.025em; }
 .timer-card { width: min(100%, 30rem); display: grid; justify-items: center; gap: 1rem; margin-block: 1.5rem; padding: 2rem; border: 1px solid rgb(199 243 107 / 30%); border-radius: 2rem; background: rgb(199 243 107 / 8%); }
 .timer-card > strong { font-variant-numeric: tabular-nums; font-size: clamp(4rem, 16vw, 8rem); line-height: .9; letter-spacing: -.06em; }
 .timer-card--open > strong { font-size: 2rem; }

@@ -719,6 +719,7 @@ describe('game store', () => {
     store.getState().startGame(setup)
     store.getState().confirmRole(); store.getState().confirmRole(); store.getState().confirmRole()
     expect(store.getState().discussionRemainingSeconds).toBe(180)
+    expect(store.getState().game?.discussionStarterPlayerId).toBe('player-1')
 
     now += 2_500
     store.getState().syncDiscussionTimer()
@@ -730,5 +731,6 @@ describe('game store', () => {
     await restored.persist.rehydrate()
     expect(restored.getState().discussionRemainingSeconds).toBe(178)
     expect(restored.getState().isDiscussionTimerRunning).toBe(false)
+    expect(restored.getState().game?.discussionStarterPlayerId).toBe('player-1')
   })
 })

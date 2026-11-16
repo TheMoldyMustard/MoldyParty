@@ -27,7 +27,7 @@ export default function DiscussionScreen() {
     <main className="screen discussion-screen">
       <span className="eyebrow">Everyone can look</span>
       <h1>Discussion time</h1>
-      {starter ? <h2>{starter.name} starts the discussion</h2> : null}
+      {starter ? <h2 className="discussion-starter">{starter.name} starts the discussion</h2> : null}
       <p>Describe the secret word without making it too obvious.</p>
       {initialSeconds !== null ? (
         <div className="timer-card">

@@ -36,6 +36,17 @@ test('three players can complete a private round and replay', async ({ page }) =
   await holdReveal(page, 'Casey')
 
   await expect(page.getByRole('heading', { name: 'Discussion time' })).toBeVisible()
+  const starterHeading = page.getByRole('heading', { level: 2, name: /starts the discussion/ })
+  await expect(starterHeading).toBeVisible()
+  const starterTypography = await starterHeading.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return { fontSize: Number.parseFloat(style.fontSize), fontWeight: Number(style.fontWeight) }
+  })
+  const descriptionFontSize = await page.locator('.discussion-screen > p').evaluate((element) =>
+    Number.parseFloat(getComputedStyle(element).fontSize),
+  )
+  expect(starterTypography.fontSize).toBeGreaterThan(descriptionFontSize)
+  expect(starterTypography.fontWeight).toBeGreaterThanOrEqual(700)
   await page.getByRole('button', { name: 'Proceed to voting' }).click()
 
   for (const [voter, target] of [['Alex', 'Blair'], ['Blair', 'Alex'], ['Casey', 'Blair']] as const) {
