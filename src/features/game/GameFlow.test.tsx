@@ -7,6 +7,7 @@ import { createRound } from '../../domain/game'
 import type { GameSetupInput } from '../../domain/types'
 import { gameStore } from '../../store/gameStore'
 import { packRepository } from '../packs/packDb'
+import DiscussionScreen from './DiscussionScreen'
 
 async function openConfiguredLobby() {
   const user = userEvent.setup()
@@ -248,6 +249,9 @@ describe('Impostor game interface', () => {
     await revealAndConfirm(user, 'Casey')
 
     expect(screen.getByRole('heading', { name: 'Discussion time' })).toBeInTheDocument()
+    const discussionGame = gameStore.getState().game!
+    const starter = discussionGame.players.find((player) => player.id === discussionGame.discussionStarterPlayerId)!
+    expect(screen.getByText(`${starter.name} starts the discussion`)).toBeInTheDocument()
     expect(screen.getByText('03:00')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Pause timer' }))
     expect(screen.getByRole('button', { name: 'Resume timer' })).toBeInTheDocument()
@@ -270,6 +274,39 @@ describe('Impostor game interface', () => {
     expect(screen.getByRole('button', { name: 'Group Vote' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Change category' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Return to lobby' })).toBeInTheDocument()
+  })
+
+  it.each([undefined, 'missing-player'])('keeps the discussion usable when a saved starter id is %s', (discussionStarterPlayerId) => {
+    const setup: GameSetupInput = {
+      playerNames: ['Alex', 'Blair', 'Casey'],
+      impostorCount: 1,
+      pack: {
+        id: 'discussion-fallback',
+        packName: 'Discussion Fallback',
+        category: 'Test',
+        source: 'builtIn',
+        items: [{ word: 'Moon', hint: 'Orbit' }],
+      },
+      hintsEnabled: true,
+      jesterEnabled: false,
+      outlierEnabled: false,
+      outlierHintsEnabled: false,
+      absoluteVotingEnabled: false,
+      discussionDurationSeconds: null,
+    }
+    gameStore.setState({
+      setup,
+      game: {
+        ...createRound(setup, () => 0),
+        phase: 'DISCUSSION',
+        discussionStarterPlayerId,
+      },
+    })
+
+    render(<DiscussionScreen />)
+
+    expect(screen.getByRole('heading', { name: 'Discussion time' })).toBeInTheDocument()
+    expect(screen.queryByText(/starts the discussion/)).not.toBeInTheDocument()
   })
 
   it('uses one collective Group Vote without passing the device', async () => {
