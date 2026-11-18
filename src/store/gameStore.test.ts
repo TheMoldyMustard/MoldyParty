@@ -114,6 +114,29 @@ describe('game store', () => {
     expect(store.getState().activeSessionId).toBe('session-2')
   })
 
+  it('renames a session without changing its roster, setup, stats, or current round', () => {
+    let now = 1_000
+    const store = createGameStore('rename-session', () => 0, localStorage, () => now, () => 'session-1')
+    store.getState().createSession('Friday Crew')
+    store.getState().startGame(setup)
+    store.getState().confirmRole()
+    const before = structuredClone(store.getState().sessionsById['session-1'])
+    now = 2_000
+
+    store.getState().renameSession('session-1', '  Weekend Crew  ')
+
+    expect(store.getState().sessionsById['session-1']).toEqual({
+      ...before,
+      name: 'Weekend Crew',
+      updatedAt: new Date(2_000).toISOString(),
+    })
+
+    store.getState().renameSession('session-1', '   ')
+    expect(store.getState().sessionsById['session-1'].name).toBe('Weekend Crew')
+    store.getState().renameSession('missing-session', 'Ignored')
+    expect(Object.keys(store.getState().sessionsById)).toEqual(['session-1'])
+  })
+
   it('resumes the unfinished round stored with a continued session', () => {
     const store = createGameStore('resume-session', () => 0, localStorage, () => 1_000, () => 'session-1')
     store.getState().createSession('Friday Crew')
@@ -193,6 +216,36 @@ describe('game store', () => {
     store.getState().startGame({ ...setup, playerNames: ['Changed', 'Names', 'Here'] })
 
     expect(store.getState().game?.players.map((player) => player.name)).toEqual(['Alex', 'Blair', 'Casey'])
+  })
+
+  it('changes category within the active session without splitting its statistics', () => {
+    const ids = ['session-1', 'unexpected-session']
+    const store = createGameStore('same-session-category', () => 0, localStorage, () => 1_000, () => ids.shift()!)
+    store.getState().createSession('Friday Crew')
+    store.getState().startGame(setup)
+    completePrivateRound(store)
+    const completed = structuredClone(store.getState().sessionsById['session-1'])
+
+    store.getState().changeCategory()
+
+    expect(store.getState().activeSessionId).toBe('session-1')
+    expect(store.getState().game).toBeNull()
+    expect(store.getState().sessionsById['session-1']).toMatchObject({
+      currentGame: null,
+      completedRounds: completed.completedRounds,
+      statsByPlayerId: completed.statsByPlayerId,
+      setup: completed.setup,
+    })
+
+    store.getState().startGame({ ...setup, pack: { ...setup.pack, id: 'new-category', packName: 'New Category' } })
+
+    expect(Object.keys(store.getState().sessionsById)).toEqual(['session-1'])
+    expect(store.getState().activeSessionId).toBe('session-1')
+    expect(store.getState().sessionsById['session-1']).toMatchObject({
+      completedRounds: completed.completedRounds,
+      statsByPlayerId: completed.statsByPlayerId,
+      setup: { pack: { id: 'new-category' } },
+    })
   })
 
   it('migrates a version 3 in-progress game into a local session', async () => {

@@ -59,7 +59,9 @@ The current round, deadline, teams, and no-repeat history are stored locally, so
 
 ## Local sessions and statistics
 
-Clicking **Impostor** opens the local session manager. From there you can create a new named session, continue a saved session, inspect its statistics table, or permanently delete it after confirmation. Sessions are stored only in the current browser profile.
+Clicking **Impostor** opens the local session manager. Click a saved-session card to continue it. Each card also has quick icons to rename the session, inspect its statistics table, or permanently delete it after confirmation. Renaming changes only the session label; the player roster and its statistics stay attached to the same people. Sessions are stored only in the current browser profile.
+
+After a completed round, **Change category** returns directly to the category picker and keeps the current session active. **Return to sessions** leaves the round setup and opens the saved-session manager.
 
 Each completed round tracks every player's role appearances, total and per-role wins/losses, correct Impostor votes, wrong Innocent guesses, votes for the Jester, times voted out as Jester, and correct Outlier word guesses. Private ballots can be attributed to individual players. Group Vote still affects role wins and losses, but it does not add individual vote-accuracy or Jester-vote credit because the ballot has no individual voter.
 

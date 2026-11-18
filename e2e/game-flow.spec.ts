@@ -211,17 +211,33 @@ test('saved session can be continued, inspected, and deleted locally', async ({ 
   statsTable = page.getByRole('table', { name: 'Stats Crew session stats' })
   await expect(statsTable.getByRole('row', { name: new RegExp(`^${statsPlayers[0]}`) }).getByRole('cell').nth(0)).toHaveText('2')
 
-  await page.getByRole('button', { name: 'Return to lobby' }).click()
+  await page.getByRole('button', { name: 'Change category' }).click()
+  await expect(page.getByRole('heading', { name: 'Pick a category' })).toBeFocused()
+  await expect(page.getByLabel('Player 1 name')).toHaveValue(statsPlayers[0])
+  await expect(page.getByLabel('Player 1 name')).toBeDisabled()
+  await page.getByRole('button', { name: '← MoldyParty' }).click()
   await expect(page.getByRole('heading', { name: 'Impostor sessions' })).toBeVisible()
+  for (const actionName of ['Rename Stats Crew', 'View stats for Stats Crew', 'Delete Stats Crew']) {
+    const actionBox = await page.getByRole('button', { name: actionName }).boundingBox()
+    expect(actionBox).not.toBeNull()
+    expect(actionBox!.width).toBeGreaterThanOrEqual(48)
+    expect(actionBox!.height).toBeGreaterThanOrEqual(48)
+  }
 
-  await page.getByRole('button', { name: 'Continue a session' }).click()
+  await page.getByRole('button', { name: 'Continue Stats Crew' }).click()
   await expect(page.getByLabel('Player 1 name')).toHaveValue(statsPlayers[0])
   await page.getByRole('button', { name: '← MoldyParty' }).click()
 
-  await page.getByRole('button', { name: 'View session stats' }).click()
+  await page.getByRole('button', { name: 'View stats for Stats Crew' }).click()
   await expect(page.getByRole('heading', { name: 'Stats Crew stats' })).toBeVisible()
   await expect(page.getByRole('table', { name: 'Stats Crew session stats' }).getByRole('row', { name: new RegExp(`^${statsPlayers[0]}`) }).getByRole('cell').nth(0)).toHaveText('2')
   await page.getByRole('button', { name: '← Sessions' }).click()
+
+  await page.getByRole('button', { name: 'Rename Stats Crew' }).click()
+  const renameDialog = page.getByRole('dialog', { name: 'Rename Stats Crew' })
+  await renameDialog.getByLabel('Session name').fill('Stats Crew Renamed')
+  await renameDialog.getByRole('button', { name: 'Save session name' }).click()
+  await expect(page.getByRole('button', { name: 'Continue Stats Crew Renamed' })).toBeVisible()
 
   await page.getByRole('button', { name: 'Create new session' }).click()
   await page.getByLabel('Session name').fill('Other Crew')
@@ -237,14 +253,13 @@ test('saved session can be continued, inspected, and deleted locally', async ({ 
   await page.getByRole('button', { name: 'Proceed to voting' }).click()
   await page.getByRole('group', { name: 'Vote for up to 1 player' }).getByRole('button', { name: 'Eli' }).click()
   await page.getByRole('button', { name: 'Decide the vote' }).click()
-  await page.getByRole('button', { name: 'Return to lobby' }).click()
+  await page.getByRole('button', { name: 'Return to sessions' }).click()
 
-  await page.getByRole('button', { name: 'Stats Crew' }).click()
-  await page.getByRole('button', { name: 'Delete session' }).click()
-  await expect(page.getByRole('dialog')).toContainText('Stats Crew')
-  await page.getByRole('button', { name: 'Delete Stats Crew' }).click()
-  await expect(page.getByRole('button', { name: 'Other Crew' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Stats Crew' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Delete Stats Crew Renamed' }).click()
+  await expect(page.getByRole('dialog')).toContainText('Stats Crew Renamed')
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete Stats Crew Renamed' }).click()
+  await expect(page.getByRole('button', { name: 'Continue Other Crew' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Continue Stats Crew Renamed' })).toHaveCount(0)
 })
 
 test('can abort an unfinished game without counting it', async ({ page }, testInfo) => {
@@ -293,12 +308,11 @@ test('can abort an unfinished game without counting it', async ({ page }, testIn
   await page.getByRole('button', { name: 'Abort game' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Abort game' }).click()
   await expect(page.getByRole('heading', { name: 'Impostor sessions' })).toBeVisible()
-  await expect(page.getByRole('button', { name: /Abort Crew/ })).toContainText('0 completed rounds')
+  await expect(page.getByRole('button', { name: 'Continue Abort Crew' })).toContainText('0 completed rounds')
 
   await page.reload()
   await page.getByRole('button', { name: 'Open Impostor' }).click()
-  await page.getByRole('button', { name: 'Abort Crew' }).click()
-  await page.getByRole('button', { name: 'Continue a session' }).click()
+  await page.getByRole('button', { name: 'Continue Abort Crew' }).click()
   await expect(page.getByRole('heading', { name: 'Who can you trust?' })).toBeVisible()
   await expect(page.getByLabel('Player 1 name')).toHaveValue('Alex')
 })
