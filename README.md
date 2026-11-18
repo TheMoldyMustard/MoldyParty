@@ -38,7 +38,7 @@ Install Playwright's browser once on a new machine with `npx playwright install 
 1. Open **Forehead Charades**, choose a compatible shared pack, and optionally narrow it by category or vibe.
 2. Pick **Classic** (60/75/90 seconds), **Henyo** (fixed 2:00), **One-Word**, or **Team Relay** with two named rosters and 3–5 turns per team.
 3. Press **Start Get Ready** while holding the phone in its neutral forehead position. The first second calibrates motion input; the full three-second countdown also requests landscape and a screen wake lock when the browser supports them.
-4. Tilt down or tap the right half for **Correct**. Tilt up or tap the left half for **Pass**. Arrow Right and Arrow Left provide a desktop fallback. Tap controls remain available even when motion permission is denied.
+4. Follow the guided setup: hold the phone neutral, tilt the phone face up to teach **Correct**, then return to neutral. During play, repeat that face-up tilt for **Correct** or tilt in the opposite direction for **Pass**. The right and left tap zones—and Arrow Right and Arrow Left on desktop—remain available when motion is disabled or unavailable.
 5. Henyo shows a bilingual category anchor plus optional **Oo / Hindi / Pwede** sound buttons. **Foul (-5s)** shortens the clock without changing the card.
 6. Correct/pass feedback uses generated Web Audio tones, optional vibration, text, and a brief color flash. Sound and haptics can be disabled in setup; no audio files are downloaded.
 7. The recap preserves every played word in order. Team Relay alternates teams, rotates holders, and totals scores after both teams finish all configured turns.

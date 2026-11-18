@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { CharadesOutcome } from '../../domain/charades'
 import { createAudioSynth, type AudioCue, type AudioSynth } from './audioSynth'
 import { vibrateForOutcome, type VibrationNavigatorLike } from './haptics'
-import { createOrientationRecognizer, type OrientationRecognizer } from './orientationInput'
+import { createOrientationRecognizer, type OrientationRecognizer, type OrientationRecognizerStatus } from './orientationInput'
 import { getOrientationAngle, lockLandscape as requestLandscape, unlockOrientation as releaseOrientation } from './orientationLock'
 import { requestOrientationPermission as requestBrowserOrientation, type OrientationConstructorLike, type OrientationPermissionStatus } from './orientationPermission'
 import { createWakeLockManager, type WakeLockManager, type WakeLockLike } from './wakeLock'
@@ -17,7 +17,7 @@ interface VisibilityTargetLike extends EventTargetLike {
 }
 
 export interface CharadesDeviceStatus {
-  motion: 'off' | 'calibrating' | 'armed' | 'denied' | 'failed'
+  motion: 'off' | 'calibrating-neutral' | 'calibrating-correct' | 'returning-neutral' | 'armed' | 'denied' | 'failed'
   wake: boolean
   landscape: boolean
 }
@@ -46,6 +46,7 @@ export interface CharadesDeviceControllerDependencies {
 
 export interface CharadesDeviceController {
   start(options: CharadesDeviceStartOptions): Promise<CharadesDeviceStatus>
+  beginGameplay(): void
   stop(): Promise<void>
   getStatus(): CharadesDeviceStatus
   playOutcome(outcome: CharadesOutcome): void
@@ -67,6 +68,16 @@ export function createCharadesDeviceController(
     dependencies.onStatus?.(status)
   }
 
+  function publishRecognizerStatus(recognizerStatus: OrientationRecognizerStatus) {
+    if (recognizerStatus === 'calibrating-neutral'
+      || recognizerStatus === 'calibrating-correct'
+      || recognizerStatus === 'returning-neutral') {
+      updateStatus({ motion: recognizerStatus })
+    }
+    if (recognizerStatus === 'armed' || recognizerStatus === 'latched') updateStatus({ motion: 'armed' })
+    if (recognizerStatus === 'failed') updateStatus({ motion: 'failed' })
+  }
+
   const onOrientation: EventListener = (event) => {
     const orientation = event as Event & { beta?: number | null; gamma?: number | null }
     const result = dependencies.recognizer.update({
@@ -74,9 +85,7 @@ export function createCharadesDeviceController(
       gamma: orientation.gamma ?? null,
       angle: dependencies.getAngle(),
     }, dependencies.now())
-    if (result.status === 'calibrating') updateStatus({ motion: 'calibrating' })
-    if (result.status === 'armed' || result.status === 'latched') updateStatus({ motion: 'armed' })
-    if (result.status === 'failed') updateStatus({ motion: 'failed' })
+    publishRecognizerStatus(result.status)
     if (result.action && dependencies.onOutcome(result.action)) {
       dependencies.audio.play(result.action)
       vibrateForOutcome(dependencies.vibrationNavigator, result.action, hapticsEnabled)
@@ -114,7 +123,7 @@ export function createCharadesDeviceController(
         wakePromise,
         landscapePromise,
       ])
-      updateStatus({ wake, landscape, motion: options.motionEnabled ? 'calibrating' : 'off' })
+      updateStatus({ wake, landscape, motion: options.motionEnabled ? 'calibrating-neutral' : 'off' })
       dependencies.documentTarget.addEventListener('visibilitychange', onVisibilityChange)
 
       if (options.motionEnabled) {
@@ -127,6 +136,9 @@ export function createCharadesDeviceController(
         }
       }
       return status
+    },
+    beginGameplay() {
+      dependencies.recognizer.beginGameplay()
     },
     async stop() {
       if (orientationListening) {
