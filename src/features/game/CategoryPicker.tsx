@@ -1,15 +1,23 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { WordPack } from '../../domain/types'
 
 interface CategoryPickerProps {
+  focusOnMount?: boolean
   packs: WordPack[]
   selectedId: string
   onSelect: (id: string) => void
   onManagePacks: () => void
 }
 
-export default function CategoryPicker({ packs, selectedId, onSelect, onManagePacks }: CategoryPickerProps) {
+export default function CategoryPicker({ focusOnMount = false, packs, selectedId, onSelect, onManagePacks }: CategoryPickerProps) {
   const gridRef = useRef<HTMLDivElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
+
+  useEffect(() => {
+    if (!focusOnMount) return
+    headingRef.current?.focus()
+    headingRef.current?.scrollIntoView?.({ block: 'center' })
+  }, [focusOnMount])
 
   useLayoutEffect(() => {
     const grid = gridRef.current
@@ -30,7 +38,7 @@ export default function CategoryPicker({ packs, selectedId, onSelect, onManagePa
   return (
     <section className="setup-section" aria-labelledby="category-title">
       <div className="section-heading">
-        <div><span className="step-number">02</span><h2 id="category-title">Pick a category</h2></div>
+        <div><span className="step-number">02</span><h2 id="category-title" ref={headingRef} tabIndex={-1}>Pick a category</h2></div>
         <button className="text-button" type="button" onClick={onManagePacks}>Manage custom packs</button>
       </div>
       <div className="category-grid" ref={gridRef}>

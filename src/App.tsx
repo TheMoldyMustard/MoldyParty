@@ -38,8 +38,8 @@ function AppContent() {
   if (activeGame === 'charades' && charadesSession) return <CharadesGame onExit={() => setView('home')} />
 
   if (activeGame === 'impostor' && game?.phase === 'GAME_OVER') return <GameOverScreen
-    onChangeCategory={() => { changeCategory(); setView('sessions') }}
-    onReturnToLobby={() => { returnToLobby(); setView('sessions') }}
+    onChangeCategory={() => { changeCategory(); setLobbyDraft(null); setView('lobby') }}
+    onReturnToSessions={() => { returnToLobby(); setView('sessions') }}
   />
 
   let activeGameScreen: ReactNode = null

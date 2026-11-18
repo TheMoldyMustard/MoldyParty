@@ -5,10 +5,10 @@ import SessionStatsTable from './SessionStatsTable'
 
 interface GameOverScreenProps {
   onChangeCategory: () => void
-  onReturnToLobby: () => void
+  onReturnToSessions: () => void
 }
 
-export default function GameOverScreen({ onChangeCategory, onReturnToLobby }: GameOverScreenProps) {
+export default function GameOverScreen({ onChangeCategory, onReturnToSessions }: GameOverScreenProps) {
   const game = useGameStore((state) => state.game)!
   const playAgain = useGameStore((state) => state.playAgain)
   const activeSessionId = useGameStore((state) => state.activeSessionId)
@@ -74,7 +74,7 @@ export default function GameOverScreen({ onChangeCategory, onReturnToLobby }: Ga
         <button className="button button--hero" type="button" onClick={() => playAgain()}>Play again</button>
         <button className="button button--secondary" type="button" onClick={() => playAgain({ absoluteVotingEnabled: true })}>Group Vote</button>
         <button className="button button--secondary" type="button" onClick={onChangeCategory}>Change category</button>
-        <button className="text-button" type="button" onClick={onReturnToLobby}>Return to lobby</button>
+        <button className="text-button" type="button" onClick={onReturnToSessions}>Return to sessions</button>
       </div>
     </main>
   )

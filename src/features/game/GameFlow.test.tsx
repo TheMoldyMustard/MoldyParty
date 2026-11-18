@@ -273,7 +273,7 @@ describe('Impostor game interface', () => {
     expect(screen.getByRole('button', { name: 'Play again' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Group Vote' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Change category' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Return to lobby' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Return to sessions' })).toBeInTheDocument()
   })
 
   it.each([undefined, 'missing-player'])('keeps the discussion usable when a saved starter id is %s', (discussionStarterPlayerId) => {

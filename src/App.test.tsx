@@ -20,6 +20,16 @@ const setup = {
   discussionDurationSeconds: null,
 }
 
+function completePrivateRound() {
+  gameStore.getState().confirmRole(); gameStore.getState().confirmRole(); gameStore.getState().confirmRole()
+  gameStore.getState().beginVoting()
+  for (const targetId of ['player-2', 'player-1', 'player-2']) {
+    gameStore.getState().showVote()
+    gameStore.getState().castVote(targetId)
+    gameStore.getState().confirmVote()
+  }
+}
+
 describe('MoldyParty app shell', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -75,16 +85,14 @@ describe('MoldyParty app shell', () => {
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('button', { name: /open impostor/i }))
-    await user.click(screen.getByRole('button', { name: 'Friday Crew' }))
-
-    await user.click(screen.getByRole('button', { name: 'View session stats' }))
+    await user.click(screen.getByRole('button', { name: 'View stats for Friday Crew' }))
 
     expect(screen.getByRole('heading', { name: 'Friday Crew stats' })).toBeInTheDocument()
     expect(screen.getByRole('table', { name: 'Friday Crew session stats' })).toHaveTextContent('Alex')
     expect(gameStore.getState().game).toBeNull()
   })
 
-  it('continues the selected session at its unfinished round', async () => {
+  it('continues a session immediately from its card', async () => {
     gameStore.getState().createSession('Friday Crew')
     gameStore.getState().startGame(setup)
     gameStore.getState().confirmRole()
@@ -92,7 +100,7 @@ describe('MoldyParty app shell', () => {
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('button', { name: /open impostor/i }))
-    await user.click(screen.getByRole('button', { name: 'Continue a session' }))
+    await user.click(screen.getByRole('button', { name: 'Continue Friday Crew' }))
 
     expect(screen.getByRole('heading', { name: 'Pass to Blair' })).toBeInTheDocument()
   })
@@ -135,6 +143,35 @@ describe('MoldyParty app shell', () => {
 
     expect(screen.getByRole('heading', { name: 'Blair was voted out' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Abort game' })).not.toBeInTheDocument()
+  })
+
+  it('changes category directly within the active saved session', async () => {
+    gameStore.getState().createSession('Friday Crew')
+    gameStore.getState().startGame(setup)
+    completePrivateRound()
+    const sessionId = gameStore.getState().activeSessionId!
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Change category' }))
+
+    expect(screen.getByRole('heading', { name: 'Pick a category' })).toHaveFocus()
+    expect(screen.getByLabelText('Player 1 name')).toBeDisabled()
+    expect(gameStore.getState().activeSessionId).toBe(sessionId)
+    expect(Object.keys(gameStore.getState().sessionsById)).toEqual([sessionId])
+  })
+
+  it('returns from a completed round to the session manager', async () => {
+    gameStore.getState().createSession('Friday Crew')
+    gameStore.getState().startGame(setup)
+    completePrivateRound()
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Return to sessions' }))
+
+    expect(screen.getByRole('heading', { name: 'Impostor sessions' })).toBeInTheDocument()
+    expect(gameStore.getState().activeSessionId).toBeNull()
   })
 
   it('keeps the abort control available through discussion and voting', async () => {
@@ -195,7 +232,7 @@ describe('MoldyParty app shell', () => {
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('button', { name: /open impostor/i }))
-    await user.click(screen.getByRole('button', { name: 'Continue a session' }))
+    await user.click(screen.getByRole('button', { name: 'Continue Friday Crew' }))
 
     expect(screen.getByLabelText('Player 1 name')).toBeDisabled()
   })
@@ -214,23 +251,41 @@ describe('MoldyParty app shell', () => {
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('button', { name: /open impostor/i }))
-    await user.click(screen.getByRole('button', { name: 'Continue a session' }))
+    await user.click(screen.getByRole('button', { name: 'Continue Friday Crew' }))
     await user.click(screen.getByRole('button', { name: '← MoldyParty' }))
 
     expect(screen.getByRole('heading', { name: 'Impostor sessions' })).toBeInTheDocument()
   })
 
-  it('confirms before deleting only the selected session', async () => {
+  it('renames a session from its card without continuing it', async () => {
     gameStore.getState().createSession('Friday Crew')
     gameStore.getState().startGame(setup)
     gameStore.getState().returnToLobby()
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('button', { name: /open impostor/i }))
-    await user.click(screen.getByRole('button', { name: 'Friday Crew' }))
-    const selectedSession = screen.getByRole('button', { name: 'Friday Crew' })
-    expect(selectedSession).toHaveAttribute('aria-pressed', 'true')
-    const deleteButton = screen.getByRole('button', { name: 'Delete session' })
+
+    await user.click(screen.getByRole('button', { name: 'Rename Friday Crew' }))
+    const renameDialog = screen.getByRole('dialog', { name: 'Rename Friday Crew' })
+    const nameInput = within(renameDialog).getByLabelText('Session name')
+    await user.clear(nameInput)
+    await user.type(nameInput, 'Weekend Crew')
+    await user.click(within(renameDialog).getByRole('button', { name: 'Save session name' }))
+
+    expect(screen.getByRole('button', { name: 'Continue Weekend Crew' })).toBeInTheDocument()
+    expect(gameStore.getState().sessionsById[Object.keys(gameStore.getState().sessionsById)[0]].name).toBe('Weekend Crew')
+    expect(gameStore.getState().activeSessionId).toBeNull()
+    expect(gameStore.getState().game).toBeNull()
+  })
+
+  it('confirms before deleting the session whose card action was used', async () => {
+    gameStore.getState().createSession('Friday Crew')
+    gameStore.getState().startGame(setup)
+    gameStore.getState().returnToLobby()
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: /open impostor/i }))
+    const deleteButton = screen.getByRole('button', { name: 'Delete Friday Crew' })
     await user.click(deleteButton)
 
     const deleteDialog = screen.getByRole('dialog')
@@ -243,7 +298,8 @@ describe('MoldyParty app shell', () => {
     expect(deleteButton).toHaveFocus()
 
     await user.click(deleteButton)
-    await user.click(screen.getByRole('button', { name: 'Delete Friday Crew' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete Friday Crew' }))
     expect(gameStore.getState().sessionsById).toEqual({})
+    expect(screen.getByRole('button', { name: 'Create new session' })).toHaveFocus()
   })
 })

@@ -271,6 +271,7 @@ export interface GameStoreState {
   lobbyIntent: LobbyIntent
   createSession: (name: string) => void
   continueSession: (sessionId: string) => void
+  renameSession: (sessionId: string, name: string) => void
   deleteSession: (sessionId: string) => void
   abortGame: () => void
   startGame: (setup: GameSetupInput) => void
@@ -429,6 +430,18 @@ export function createGameStore(
         setup: session.setup,
         game: session.currentGame,
         lobbyIntent: 'default',
+      }
+    }),
+
+    renameSession: (sessionId, name) => set((state) => {
+      const session = state.sessionsById[sessionId]
+      const trimmedName = name.trim()
+      if (!session || !trimmedName) return state
+      return {
+        sessionsById: {
+          ...state.sessionsById,
+          [sessionId]: { ...session, name: trimmedName, updatedAt: new Date(clock()).toISOString() },
+        },
       }
     }),
 
@@ -683,7 +696,6 @@ export function createGameStore(
             [state.activeSessionId]: { ...state.sessionsById[state.activeSessionId], currentGame: null },
           }
         : state.sessionsById,
-      activeSessionId: null,
       game: null,
       pendingVote: undefined,
       isVoteReady: false,

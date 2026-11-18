@@ -49,6 +49,7 @@ function draftFromSetup(setup: GameSetupInput | null): LobbyDraft {
 
 export default function LobbyScreen({ draft: savedDraft, onDraftChange, onBack, onManagePacks, preferredPackId, onPreferredPackApplied, notice, rosterLocked = false }: LobbyScreenProps) {
   const previousSetup = useGameStore((state) => state.setup)
+  const lobbyIntent = useGameStore((state) => state.lobbyIntent)
   const startGame = useGameStore((state) => state.startGame)
   const [draft, setDraft] = useState<LobbyDraft>(() => savedDraft ?? draftFromSetup(previousSetup))
   const [customPacks, setCustomPacks] = useState<WordPack[]>([])
@@ -113,7 +114,7 @@ export default function LobbyScreen({ draft: savedDraft, onDraftChange, onBack, 
       {notice && <p className="status-message" role="status">{notice}</p>}
       <div className="setup-layout">
         <PlayerEditor names={draft.playerNames} onChange={updatePlayerNames} locked={rosterLocked} />
-        <CategoryPicker packs={packs} selectedId={draft.selectedPackId} onSelect={(selectedPackId) => updateDraft({ ...draft, selectedPackId })} onManagePacks={onManagePacks} />
+        <CategoryPicker focusOnMount={lobbyIntent === 'category'} packs={packs} selectedId={draft.selectedPackId} onSelect={(selectedPackId) => updateDraft({ ...draft, selectedPackId })} onManagePacks={onManagePacks} />
         <section className="setup-section" aria-labelledby="rules-title">
           <div className="section-heading"><div><span className="step-number">03</span><h2 id="rules-title">Round rules</h2></div></div>
           <div className="rule-groups">
