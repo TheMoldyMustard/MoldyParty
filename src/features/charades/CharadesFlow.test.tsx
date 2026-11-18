@@ -53,6 +53,7 @@ describe('Forehead Charades interface', () => {
     const user = userEvent.setup()
     render(<App />)
     await user.click(screen.getByRole('button', { name: /open forehead charades/i }))
+    await user.click(screen.getByRole('checkbox', { name: /Tilt controls/i }))
     await user.click(screen.getByRole('button', { name: 'Start game' }))
 
     expect(screen.getByRole('heading', { name: /Get ready/i })).toBeInTheDocument()

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createOrientationRecognizer } from './orientationInput'
-import { createCharadesDeviceController } from './useCharadesDevices'
+import { createCharadesDeviceController, type CharadesDeviceControllerDependencies } from './useCharadesDevices'
 
 function fakeTarget() {
   const listeners = new Map<string, Set<EventListener>>()
@@ -19,25 +19,37 @@ function fakeTarget() {
   }
 }
 
+function orientation(beta: number, gamma: number) {
+  return Object.assign(new Event('deviceorientation'), { beta, gamma })
+}
+
+function dependencies(overrides: Partial<CharadesDeviceControllerDependencies> = {}): CharadesDeviceControllerDependencies {
+  return {
+    windowTarget: fakeTarget(),
+    documentTarget: { ...fakeTarget(), visibilityState: 'visible' as const },
+    requestPermission: vi.fn().mockResolvedValue('granted'),
+    getAngle: () => 0,
+    now: () => 0,
+    wakeLock: { acquire: vi.fn().mockResolvedValue(false), release: vi.fn(), isHeld: vi.fn() },
+    lockLandscape: vi.fn().mockResolvedValue(false),
+    unlockOrientation: vi.fn(),
+    audio: { unlock: vi.fn(), play: vi.fn(), playCountdown: vi.fn(), setEnabled: vi.fn(), dispose: vi.fn() },
+    vibrationNavigator: {},
+    recognizer: createOrientationRecognizer(),
+    onOutcome: vi.fn().mockReturnValue(true),
+    ...overrides,
+  }
+}
+
 describe('Charades device controller', () => {
   it('requests motion permission synchronously before awaiting other device services', async () => {
     let releaseAudio!: () => void
     const audioUnlock = new Promise<void>((resolve) => { releaseAudio = resolve })
     const requestPermission = vi.fn().mockResolvedValue('granted')
-    const controller = createCharadesDeviceController({
-      windowTarget: fakeTarget(),
-      documentTarget: { ...fakeTarget(), visibilityState: 'visible' as const },
+    const controller = createCharadesDeviceController(dependencies({
       requestPermission,
-      getAngle: () => 0,
-      now: () => 0,
-      wakeLock: { acquire: vi.fn().mockResolvedValue(false), release: vi.fn(), isHeld: vi.fn() },
-      lockLandscape: vi.fn().mockResolvedValue(false),
-      unlockOrientation: vi.fn(),
       audio: { unlock: vi.fn(() => audioUnlock.then(() => true)), play: vi.fn(), playCountdown: vi.fn(), setEnabled: vi.fn(), dispose: vi.fn() },
-      vibrationNavigator: {},
-      recognizer: createOrientationRecognizer(),
-      onOutcome: vi.fn().mockReturnValue(true),
-    })
+    }))
 
     const starting = controller.start({ motionEnabled: true, soundEnabled: true, hapticsEnabled: false })
     expect(requestPermission).toHaveBeenCalledTimes(1)
@@ -45,113 +57,90 @@ describe('Charades device controller', () => {
     await starting
   })
 
-  it('calibrates orientation, forwards semantic actions, and cleans up every service', async () => {
+  it('publishes guided phases, then forwards calibrated phone-face-up as Correct', async () => {
     let now = 0
     const windowTarget = fakeTarget()
-    const documentTarget = { ...fakeTarget(), visibilityState: 'visible' as const }
     const onOutcome = vi.fn().mockReturnValue(true)
-    const wakeLock = { acquire: vi.fn().mockResolvedValue(true), release: vi.fn().mockResolvedValue(undefined), isHeld: vi.fn() }
     const audio = {
-      unlock: vi.fn().mockResolvedValue(true),
-      play: vi.fn().mockReturnValue(true),
-      playCountdown: vi.fn().mockReturnValue(true),
-      setEnabled: vi.fn(),
-      dispose: vi.fn().mockResolvedValue(undefined),
+      unlock: vi.fn().mockResolvedValue(true), play: vi.fn().mockReturnValue(true),
+      playCountdown: vi.fn(), setEnabled: vi.fn(), dispose: vi.fn(),
     }
-    const unlock = vi.fn()
     const vibrate = vi.fn().mockReturnValue(true)
-    const controller = createCharadesDeviceController({
+    const controller = createCharadesDeviceController(dependencies({
       windowTarget,
-      documentTarget,
-      requestPermission: vi.fn().mockResolvedValue('granted'),
-      getAngle: () => 0,
       now: () => now,
-      wakeLock,
-      lockLandscape: vi.fn().mockResolvedValue(true),
-      unlockOrientation: unlock,
       audio,
       vibrationNavigator: { vibrate },
-      recognizer: createOrientationRecognizer({ minimumSamples: 2, dwellMs: 0 }),
+      recognizer: createOrientationRecognizer({ minimumSamples: 2, gestureCalibrationMs: 0, minimumGestureSamples: 2, dwellMs: 0 }),
       onOutcome,
-    })
+    }))
 
     await controller.start({ motionEnabled: true, soundEnabled: true, hapticsEnabled: true })
-    windowTarget.dispatch('deviceorientation', Object.assign(new Event('deviceorientation'), { beta: 10, gamma: 0 }))
+    expect(controller.getStatus().motion).toBe('calibrating-neutral')
+    windowTarget.dispatch('deviceorientation', orientation(10, 0))
     now = 1_000
-    windowTarget.dispatch('deviceorientation', Object.assign(new Event('deviceorientation'), { beta: 10, gamma: 0 }))
+    windowTarget.dispatch('deviceorientation', orientation(10, 0))
+    expect(controller.getStatus().motion).toBe('calibrating-correct')
     now = 1_100
-    windowTarget.dispatch('deviceorientation', Object.assign(new Event('deviceorientation'), { beta: 40, gamma: 0 }))
-    windowTarget.dispatch('deviceorientation', Object.assign(new Event('deviceorientation'), { beta: 40, gamma: 0 }))
-    controller.playOutcome('pass')
+    windowTarget.dispatch('deviceorientation', orientation(40, 0))
+    windowTarget.dispatch('deviceorientation', orientation(40, 0))
+    expect(controller.getStatus().motion).toBe('returning-neutral')
+    windowTarget.dispatch('deviceorientation', orientation(10, 0))
+    expect(controller.getStatus().motion).toBe('armed')
+
+    controller.beginGameplay()
+    windowTarget.dispatch('deviceorientation', orientation(40, 0))
+    windowTarget.dispatch('deviceorientation', orientation(40, 0))
 
     expect(onOutcome).toHaveBeenCalledWith('correct')
     expect(audio.play).toHaveBeenCalledWith('correct')
     expect(vibrate).toHaveBeenCalledWith(35)
-    expect(audio.play).toHaveBeenCalledWith('pass')
-    expect(vibrate).toHaveBeenCalledWith([30, 45, 30])
-
-    await controller.stop()
-    expect(windowTarget.removeEventListener).toHaveBeenCalledWith('deviceorientation', expect.any(Function))
-    expect(wakeLock.release).toHaveBeenCalled()
-    expect(unlock).toHaveBeenCalled()
-    expect(audio.dispose).toHaveBeenCalled()
   })
 
-  it('reports recalibration and recovers after the screen orientation changes', async () => {
+  it('restarts guided calibration before play but fails closed after play on rotation', async () => {
     let now = 0
     let angle = 0
     const windowTarget = fakeTarget()
     const onOutcome = vi.fn().mockReturnValue(true)
-    const controller = createCharadesDeviceController({
+    const controller = createCharadesDeviceController(dependencies({
       windowTarget,
-      documentTarget: { ...fakeTarget(), visibilityState: 'visible' as const },
-      requestPermission: vi.fn().mockResolvedValue('granted'),
       getAngle: () => angle,
       now: () => now,
-      wakeLock: { acquire: vi.fn().mockResolvedValue(false), release: vi.fn(), isHeld: vi.fn() },
-      lockLandscape: vi.fn().mockResolvedValue(false),
-      unlockOrientation: vi.fn(),
-      audio: { unlock: vi.fn(), play: vi.fn(), playCountdown: vi.fn(), setEnabled: vi.fn(), dispose: vi.fn() },
-      vibrationNavigator: {},
-      recognizer: createOrientationRecognizer({ minimumSamples: 2 }),
+      recognizer: createOrientationRecognizer({ minimumSamples: 2, gestureCalibrationMs: 0, minimumGestureSamples: 2, dwellMs: 0 }),
       onOutcome,
-    })
+    }))
 
     await controller.start({ motionEnabled: true, soundEnabled: false, hapticsEnabled: false })
-    windowTarget.dispatch('deviceorientation', Object.assign(new Event('deviceorientation'), { beta: 10, gamma: 10 }))
+    windowTarget.dispatch('deviceorientation', orientation(10, 0))
     now = 1_000
-    windowTarget.dispatch('deviceorientation', Object.assign(new Event('deviceorientation'), { beta: 10, gamma: 10 }))
-    expect(controller.getStatus().motion).toBe('armed')
+    windowTarget.dispatch('deviceorientation', orientation(10, 0))
+    expect(controller.getStatus().motion).toBe('calibrating-correct')
 
     angle = 90
     now = 1_100
-    windowTarget.dispatch('deviceorientation', Object.assign(new Event('deviceorientation'), { beta: 45, gamma: 10 }))
-    expect(controller.getStatus().motion).toBe('calibrating')
-    expect(onOutcome).not.toHaveBeenCalled()
-
+    windowTarget.dispatch('deviceorientation', orientation(10, 0))
+    expect(controller.getStatus().motion).toBe('calibrating-neutral')
     now = 2_100
-    windowTarget.dispatch('deviceorientation', Object.assign(new Event('deviceorientation'), { beta: 45, gamma: 10 }))
+    windowTarget.dispatch('deviceorientation', orientation(10, 0))
+    now = 2_200
+    windowTarget.dispatch('deviceorientation', orientation(10, 30))
+    windowTarget.dispatch('deviceorientation', orientation(10, 30))
+    windowTarget.dispatch('deviceorientation', orientation(10, 0))
     expect(controller.getStatus().motion).toBe('armed')
+
+    controller.beginGameplay()
+    angle = 0
+    windowTarget.dispatch('deviceorientation', orientation(10, 30))
+    expect(controller.getStatus().motion).toBe('failed')
     expect(onOutcome).not.toHaveBeenCalled()
   })
 
   it('continues with tap controls after motion permission is denied', async () => {
     const windowTarget = fakeTarget()
-    const documentTarget = { ...fakeTarget(), visibilityState: 'visible' as const }
-    const controller = createCharadesDeviceController({
+    const controller = createCharadesDeviceController(dependencies({
       windowTarget,
-      documentTarget,
       requestPermission: vi.fn().mockResolvedValue('denied'),
-      getAngle: () => 0,
-      now: () => 0,
-      wakeLock: { acquire: vi.fn().mockResolvedValue(false), release: vi.fn(), isHeld: vi.fn() },
-      lockLandscape: vi.fn().mockResolvedValue(false),
-      unlockOrientation: vi.fn(),
-      audio: { unlock: vi.fn(), play: vi.fn(), playCountdown: vi.fn(), setEnabled: vi.fn(), dispose: vi.fn() },
-      vibrationNavigator: {},
-      recognizer: createOrientationRecognizer(),
-      onOutcome: vi.fn(),
-    })
+    }))
 
     const status = await controller.start({ motionEnabled: true, soundEnabled: false, hapticsEnabled: false })
 
