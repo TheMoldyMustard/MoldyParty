@@ -42,6 +42,8 @@ export function createOrientationRecognizer(options: OrientationRecognizerOption
   let status: OrientationRecognizerStatus = 'idle'
   let calibrationStartedAt = 0
   let calibrationAngle = 0
+  let calibrationAngleKnown = false
+  let recoveringFromRotation = false
   let samples: number[] = []
   let baseline = 0
   let candidate: CharadesOutcome | null = null
@@ -51,42 +53,52 @@ export function createOrientationRecognizer(options: OrientationRecognizerOption
     return { action, status }
   }
 
+  function beginCalibration(startedAtMs: number, angle?: number, recovering = false) {
+    status = 'calibrating'
+    calibrationStartedAt = startedAtMs
+    calibrationAngle = angle ?? 0
+    calibrationAngleKnown = angle !== undefined
+    recoveringFromRotation = recovering
+    samples = []
+    baseline = 0
+    candidate = null
+    candidateSince = 0
+  }
+
   return {
     startCalibration(startedAtMs) {
-      status = 'calibrating'
-      calibrationStartedAt = startedAtMs
-      calibrationAngle = 0
-      samples = []
-      candidate = null
+      beginCalibration(startedAtMs)
     },
     update(sample, nowMs) {
       if (status === 'idle' || status === 'failed') return result()
+      const normalizedAngle = ((Math.round(sample.angle / 90) * 90) % 360 + 360) % 360
+      if (!calibrationAngleKnown) {
+        calibrationAngle = normalizedAngle
+        calibrationAngleKnown = true
+      } else if (normalizedAngle !== calibrationAngle) {
+        beginCalibration(nowMs, normalizedAngle, true)
+      }
       if (!Number.isFinite(sample.beta) || !Number.isFinite(sample.gamma)) return result()
       const beta = sample.beta as number
       const gamma = sample.gamma as number
-      const normalizedAngle = ((Math.round(sample.angle / 90) * 90) % 360 + 360) % 360
 
       if (status === 'calibrating') {
-        if (samples.length === 0) calibrationAngle = normalizedAngle
-        if (normalizedAngle !== calibrationAngle) {
-          status = 'failed'
-          return result()
-        }
-        samples.push(normalizeForwardTilt(beta, gamma, normalizedAngle))
+        const normalizedTilt = normalizeForwardTilt(beta, gamma, normalizedAngle)
+        samples.push(normalizedTilt)
         if (nowMs - calibrationStartedAt < calibrationMs) return result()
         const ordered = [...samples].sort((left, right) => left - right)
         const spread = ordered.length > 0 ? ordered[ordered.length - 1] - ordered[0] : Number.POSITIVE_INFINITY
         if (ordered.length < minimumSamples || spread > maximumCalibrationSpread) {
+          if (recoveringFromRotation) {
+            beginCalibration(nowMs, normalizedAngle, true)
+            samples.push(normalizedTilt)
+            return result()
+          }
           status = 'failed'
           return result()
         }
         baseline = ordered[Math.floor(ordered.length / 2)]
         status = 'armed'
-        return result()
-      }
-
-      if (normalizedAngle !== calibrationAngle) {
-        status = 'failed'
         return result()
       }
 

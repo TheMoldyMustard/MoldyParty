@@ -74,6 +74,7 @@ export function createCharadesDeviceController(
       gamma: orientation.gamma ?? null,
       angle: dependencies.getAngle(),
     }, dependencies.now())
+    if (result.status === 'calibrating') updateStatus({ motion: 'calibrating' })
     if (result.status === 'armed' || result.status === 'latched') updateStatus({ motion: 'armed' })
     if (result.status === 'failed') updateStatus({ motion: 'failed' })
     if (result.action && dependencies.onOutcome(result.action)) {
