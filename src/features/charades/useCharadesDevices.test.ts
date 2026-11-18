@@ -97,6 +97,44 @@ describe('Charades device controller', () => {
     expect(audio.dispose).toHaveBeenCalled()
   })
 
+  it('reports recalibration and recovers after the screen orientation changes', async () => {
+    let now = 0
+    let angle = 0
+    const windowTarget = fakeTarget()
+    const onOutcome = vi.fn().mockReturnValue(true)
+    const controller = createCharadesDeviceController({
+      windowTarget,
+      documentTarget: { ...fakeTarget(), visibilityState: 'visible' as const },
+      requestPermission: vi.fn().mockResolvedValue('granted'),
+      getAngle: () => angle,
+      now: () => now,
+      wakeLock: { acquire: vi.fn().mockResolvedValue(false), release: vi.fn(), isHeld: vi.fn() },
+      lockLandscape: vi.fn().mockResolvedValue(false),
+      unlockOrientation: vi.fn(),
+      audio: { unlock: vi.fn(), play: vi.fn(), playCountdown: vi.fn(), setEnabled: vi.fn(), dispose: vi.fn() },
+      vibrationNavigator: {},
+      recognizer: createOrientationRecognizer({ minimumSamples: 2 }),
+      onOutcome,
+    })
+
+    await controller.start({ motionEnabled: true, soundEnabled: false, hapticsEnabled: false })
+    windowTarget.dispatch('deviceorientation', Object.assign(new Event('deviceorientation'), { beta: 10, gamma: 10 }))
+    now = 1_000
+    windowTarget.dispatch('deviceorientation', Object.assign(new Event('deviceorientation'), { beta: 10, gamma: 10 }))
+    expect(controller.getStatus().motion).toBe('armed')
+
+    angle = 90
+    now = 1_100
+    windowTarget.dispatch('deviceorientation', Object.assign(new Event('deviceorientation'), { beta: 45, gamma: 10 }))
+    expect(controller.getStatus().motion).toBe('calibrating')
+    expect(onOutcome).not.toHaveBeenCalled()
+
+    now = 2_100
+    windowTarget.dispatch('deviceorientation', Object.assign(new Event('deviceorientation'), { beta: 45, gamma: 10 }))
+    expect(controller.getStatus().motion).toBe('armed')
+    expect(onOutcome).not.toHaveBeenCalled()
+  })
+
   it('continues with tap controls after motion permission is denied', async () => {
     const windowTarget = fakeTarget()
     const documentTarget = { ...fakeTarget(), visibilityState: 'visible' as const }
