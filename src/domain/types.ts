@@ -1,6 +1,8 @@
 export type GamePhase = 'LOBBY' | 'ROLE_REVEAL' | 'DISCUSSION' | 'VOTING' | 'OUTLIER_GUESS' | 'GAME_OVER'
 export type PlayerRole = 'INNOCENT' | 'IMPOSTOR' | 'JESTER' | 'OUTLIER'
-export type GameId = 'impostor' | 'charades'
+export type PackGameId = 'impostor' | 'charades'
+export type AppGameId = PackGameId | 'category-bomb'
+export type GameId = PackGameId
 export type CharadesCategory = 'person' | 'place' | 'object' | 'animal' | 'food' | 'pop-culture' | 'other'
 export type CharadesVibe = 'casual' | 'pop-culture-local' | 'chaos-hard'
 

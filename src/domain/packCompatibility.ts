@@ -1,4 +1,4 @@
-import type { CharadesCategory, CharadesVibe, GameId, WordItem, WordPack } from './types'
+import type { CharadesCategory, CharadesVibe, PackGameId, WordItem, WordPack } from './types'
 
 export interface CharadesPackFilters {
   categories?: CharadesCategory[]
@@ -27,7 +27,7 @@ export function getItemCategory(item: WordItem, packCategory: string): CharadesC
 
 export function eligibleItems(
   pack: WordPack,
-  gameId: GameId,
+  gameId: PackGameId,
   filters: CharadesPackFilters = {},
 ): WordItem[] {
   if (gameId === 'impostor') {
@@ -46,7 +46,7 @@ export function eligibleItems(
 
 export function isPackUsableFor(
   pack: WordPack,
-  gameId: GameId,
+  gameId: PackGameId,
   filters: CharadesPackFilters = {},
 ): boolean {
   return eligibleItems(pack, gameId, filters).length >= (gameId === 'charades' ? 2 : 1)

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import type { WordPack } from './types'
+import { describe, expect, expectTypeOf, it } from 'vitest'
+import type { AppGameId, PackGameId, WordPack } from './types'
 import { eligibleItems, getItemCategory, isPackUsableFor } from './packCompatibility'
 
 const mixedPack = {
@@ -16,6 +16,12 @@ const mixedPack = {
 } as WordPack
 
 describe('pack compatibility', () => {
+  it('keeps app routing ids separate from pack consumer ids', () => {
+    expectTypeOf<Parameters<typeof eligibleItems>[1]>().toEqualTypeOf<PackGameId>()
+    expectTypeOf<'category-bomb'>().toMatchTypeOf<AppGameId>()
+    expectTypeOf<'category-bomb'>().not.toMatchTypeOf<PackGameId>()
+  })
+
   it('keeps only hinted non-charades-only items eligible for Impostor', () => {
     expect(eligibleItems(mixedPack, 'impostor').map((item) => item.word)).toEqual(['Adobo', 'Intramuros'])
   })
