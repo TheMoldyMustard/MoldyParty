@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { deriveCategoryBombDisplayMode, validateCategoryBombSettings, type CategoryBombTurnPolicy } from '../../domain/categoryBomb'
-import { categoryBombStore } from '../../store/categoryBombStore'
+import { categoryBombStore, DEFAULT_CATEGORY_BOMB_PASS_TIME_BONUS } from '../../store/categoryBombStore'
 import { appStore } from '../../store/appStore'
 import { usePreferencesStore } from '../../store/preferencesStore'
 
@@ -34,8 +34,17 @@ export default function CategoryBombSetupScreen({
   const displayMode = deriveCategoryBombDisplayMode(names.length)
 
   function start() {
-    const passTimeBonusMinMs = passTimeBonusMinSeconds.trim() === '' ? Number.NaN : Number(passTimeBonusMinSeconds) * 1_000
-    const passTimeBonusMaxMs = passTimeBonusMaxSeconds.trim() === '' ? Number.NaN : Number(passTimeBonusMaxSeconds) * 1_000
+    const enteredMinMs = passTimeBonusMinSeconds.trim() === '' ? Number.NaN : Number(passTimeBonusMinSeconds) * 1_000
+    const enteredMaxMs = passTimeBonusMaxSeconds.trim() === '' ? Number.NaN : Number(passTimeBonusMaxSeconds) * 1_000
+    const enteredRangeIsValid = [enteredMinMs, enteredMaxMs].every((value) => (
+      Number.isFinite(value) && value >= 0 && value <= 10_000 && Number.isInteger(value / 100)
+    )) && enteredMinMs <= enteredMaxMs
+    const passTimeBonusMinMs = !passTimeBonusEnabled && !enteredRangeIsValid
+      ? DEFAULT_CATEGORY_BOMB_PASS_TIME_BONUS.minMs
+      : enteredMinMs
+    const passTimeBonusMaxMs = !passTimeBonusEnabled && !enteredRangeIsValid
+      ? DEFAULT_CATEGORY_BOMB_PASS_TIME_BONUS.maxMs
+      : enteredMaxMs
     const settings = {
       turnPolicy,
       passTimeBonusEnabled,

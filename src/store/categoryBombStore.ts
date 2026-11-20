@@ -52,6 +52,24 @@ const categoryBombSeats = new Set([
   'bottom-right', 'bottom-center', 'bottom-left', 'left-bottom', 'left-center', 'left-top',
 ])
 
+function migrateLegacyRound(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.settings)) return value
+  const hasNoPassBonusSettings = !('passTimeBonusEnabled' in value.settings)
+    && !('passTimeBonusMinMs' in value.settings)
+    && !('passTimeBonusMaxMs' in value.settings)
+  if (!hasNoPassBonusSettings || 'lastAppliedPassBonusMs' in value) return value
+  return {
+    ...value,
+    settings: {
+      ...value.settings,
+      passTimeBonusEnabled: true,
+      passTimeBonusMinMs: 1_500,
+      passTimeBonusMaxMs: 1_500,
+    },
+    lastAppliedPassBonusMs: 0,
+  }
+}
+
 function isRecoverableRound(value: unknown): value is CategoryBombRound {
   if (!isRecord(value) || !['PLACEMENT', 'READY', 'ACTIVE', 'EXPLODED'].includes(String(value.phase))) return false
   if (!isRecord(value.settings) || !Array.isArray(value.settings.players)) return false
@@ -76,7 +94,7 @@ function isRecoverableRound(value: unknown): value is CategoryBombRound {
   }
   if (typeof value.id !== 'string' || !value.id || typeof value.categoryId !== 'string' || !value.categoryId || typeof value.categoryLabel !== 'string' || !value.categoryLabel) return false
   if (!Array.isArray(value.remainingCyclePlayerIds) || !Number.isInteger(value.actionToken) || Number(value.actionToken) < 0) return false
-  if (!Number.isFinite(value.extensionGrantedMs) || Number(value.extensionGrantedMs) < 0 || Number(value.extensionGrantedMs) > 15_000) return false
+  if (!Number.isFinite(value.extensionGrantedMs) || Number(value.extensionGrantedMs) < 0 || Number(value.extensionGrantedMs) > 15_000 || !Number.isInteger(Number(value.extensionGrantedMs) / 100)) return false
   if (!Number.isFinite(value.lastAppliedPassBonusMs) || Number(value.lastAppliedPassBonusMs) < 0 || Number(value.lastAppliedPassBonusMs) > 10_000 || !Number.isInteger(Number(value.lastAppliedPassBonusMs) / 100)) return false
   if (Number(value.lastAppliedPassBonusMs) > Number(value.extensionGrantedMs)) return false
   const playerIds = new Set(players.map((player) => player.id))
@@ -173,8 +191,9 @@ export function createCategoryBombStore(
     storage: jsonStorage(storage),
     partialize: (state) => ({ round: state.round }),
     merge: (persisted, current) => {
-      const saved = isRecord(persisted) && isRecoverableRound(persisted.round)
-        ? { ...persisted.round, lastAppliedPassBonusMs: 0 }
+      const candidate = isRecord(persisted) ? migrateLegacyRound(persisted.round) : null
+      const saved = isRecoverableRound(candidate)
+        ? { ...candidate, lastAppliedPassBonusMs: 0 }
         : null
       return { ...current, round: saved }
     },

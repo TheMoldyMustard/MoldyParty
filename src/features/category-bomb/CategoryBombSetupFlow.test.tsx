@@ -101,6 +101,23 @@ describe('Category Bomb setup and pre-round screens', () => {
     expect(categoryBombStore.getState().round).toBeNull()
   })
 
+  it('uses the default retained range when an incomplete bonus draft is disabled', async () => {
+    const user = userEvent.setup()
+    render(<CategoryBombSetupScreen onBack={() => undefined} initialPlayerNames={names(3)} />)
+    const toggle = screen.getByRole('checkbox', { name: /Add random time on pass/i })
+    await user.click(toggle)
+    await user.clear(screen.getByLabelText('Minimum seconds'))
+    await user.click(toggle)
+    await user.click(screen.getByRole('button', { name: 'Arrange players' }))
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(categoryBombStore.getState().round?.settings).toMatchObject({
+      passTimeBonusEnabled: false,
+      passTimeBonusMinMs: 500,
+      passTimeBonusMaxMs: 3_000,
+    })
+  })
+
   it('swaps radial names and arms from the placement screen', async () => {
     categoryBombStore.getState().startSetup(names(4), 'fair-cycle')
     const before = categoryBombStore.getState().round!

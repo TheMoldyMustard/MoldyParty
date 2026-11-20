@@ -112,6 +112,48 @@ describe('Category Bomb store', () => {
     expect(restored.getState().round?.lastAppliedPassBonusMs).toBe(0)
   })
 
+  it('migrates a complete legacy active round to the former fixed pass bonus', async () => {
+    const storageName = 'category-bomb-legacy-round'
+    const source = createCategoryBombStore(storageName, () => 0, localStorage, () => 1_000)
+    source.getState().startSetup(names(3), 'fair-cycle', { enabled: true, minMs: 1_500, maxMs: 1_500 })
+    source.getState().arm(1_000)
+    source.getState().acceptAnswer(source.getState().round!.actionToken, 1_100)
+    const before = source.getState().round!
+    const saved = JSON.parse(localStorage.getItem(storageName)!)
+    delete saved.state.round.settings.passTimeBonusEnabled
+    delete saved.state.round.settings.passTimeBonusMinMs
+    delete saved.state.round.settings.passTimeBonusMaxMs
+    delete saved.state.round.lastAppliedPassBonusMs
+    localStorage.setItem(storageName, JSON.stringify(saved))
+
+    const restored = createCategoryBombStore(storageName, () => 0, localStorage, () => 1_200)
+    await restored.persist.rehydrate()
+    expect(restored.getState().round).toMatchObject({
+      currentPlayerId: before.currentPlayerId,
+      deadlineMs: before.deadlineMs,
+      extensionGrantedMs: 1_500,
+      lastAppliedPassBonusMs: 0,
+      settings: {
+        passTimeBonusEnabled: true,
+        passTimeBonusMinMs: 1_500,
+        passTimeBonusMaxMs: 1_500,
+      },
+    })
+  })
+
+  it('drops a persisted round whose cumulative extension is off the 0.1-second grid', async () => {
+    const storageName = 'category-bomb-invalid-extension-grid'
+    const source = createCategoryBombStore(storageName, () => 0, localStorage, () => 1_000)
+    source.getState().startSetup(names(3), 'fair-cycle')
+    const saved = JSON.parse(localStorage.getItem(storageName)!)
+    saved.state.round.extensionGrantedMs = 14_950
+    localStorage.setItem(storageName, JSON.stringify(saved))
+
+    const restored = createCategoryBombStore(storageName, () => 0, localStorage, () => 1_000)
+    await restored.persist.rehydrate()
+    expect(restored.getState().round).toBeNull()
+  })
+
   it('drops an active snapshot whose fair-cycle queue contains an unknown player', async () => {
     const source = createCategoryBombStore('category-bomb-invalid-queue', () => 0, localStorage, () => 1_000)
     source.getState().startSetup(names(3), 'fair-cycle')
