@@ -48,7 +48,7 @@ export default function GetReadyScreen({ session, devices, deviceStatus, onExit 
   async function start() {
     setStarted(true)
     const status = await devices.start({
-      motionEnabled: session.settings.motionEnabled,
+      motionEnabled: false,
       soundEnabled,
       hapticsEnabled,
     })

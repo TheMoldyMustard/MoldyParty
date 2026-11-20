@@ -49,6 +49,22 @@ describe('Forehead Charades interface', () => {
     expect(screen.getByRole('checkbox', { name: 'Pop Culture / Local' })).toBeInTheDocument()
   })
 
+  it('marks tilt controls as work in progress and prevents motion-enabled sessions', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /open forehead charades/i }))
+    const tiltControls = screen.getByRole('checkbox', { name: /Tilt controls — Work in progress/i })
+    expect(tiltControls).toBeDisabled()
+    expect(tiltControls).not.toBeChecked()
+
+    fireEvent.click(tiltControls)
+    expect(tiltControls).not.toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'Start game' }))
+
+    expect(charadesStore.getState().session?.settings.motionEnabled).toBe(false)
+  })
+
   it('runs Get Ready before the timer, accepts a correct tap, and shows the recap', async () => {
     const user = userEvent.setup()
     render(<App />)
