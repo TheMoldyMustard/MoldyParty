@@ -1,6 +1,6 @@
 # MoldyParty
 
-MoldyParty is an offline-first, installable pass-the-device party collection. **Impostor** privately assigns roles and guides voting; **Forehead Charades** turns the same device and word library into a fast, tilt-or-tap guessing game. Neither game requires accounts, a server, or a network connection after the first production load.
+MoldyParty is an offline-first, installable pass-the-device party collection. **Impostor** privately assigns roles and guides voting; **Forehead Charades** turns the same device and word library into a fast, tilt-or-tap guessing game; and **Category Bomb** challenges a group to name valid items before a hidden fuse runs out. None of the games requires accounts, a server, or a network connection after the first production load.
 
 ## Run locally
 
@@ -32,6 +32,16 @@ The service worker is generated only for production builds. Browser install prom
 Install Playwright's browser once on a new machine with `npx playwright install chromium`.
 
 ## How the game works
+
+### Category Bomb
+
+1. Add at least two uniquely named players and choose **Fair cycle** or **Chaos**. Fair cycle gives everyone one turn before reshuffling; Chaos may choose any player except the person who just answered.
+2. With 2–12 players, place the phone in the center and arrange the names around it. The center arrow points toward the current player. With 13 or more players, the game switches to a large-name view with no seating board or arrow, so the phone can be passed directly.
+3. Read the category, say a valid item, then tap the bomb and pass the phone to the next named player. Each accepted answer adds a brief fixed 1.5-second allowance. The random fuse length scales with the group size and is never displayed.
+4. The group self-moderates repetition and invalid answers: hold the foul control for 600 ms to explode the current player. A normal expiry also reveals the player holding the turn when the fuse ends.
+5. Select **New bomb** to keep the roster and rules while drawing a new category, or return to placement/rules before the next round.
+
+The active round and wall-clock deadline are stored locally. Reloading—even offline after the app has been cached—recovers the same round and immediately reconciles an expired fuse. Sound, vibration, and wake lock are progressive enhancements; the visible tap controls always remain available.
 
 ### Forehead Charades
 
@@ -112,11 +122,11 @@ Supported categories are `person`, `place`, `object`, `animal`, `food`, `pop-cul
 
 - React, TypeScript, Vite, and Tailwind CSS provide the responsive interface.
 - Pure functions in `src/domain` own validation, phase transitions, card/deck policies, role assignment, ballots, ties, relay rotation, and results.
-- Zustand coordinates and persists both finite-state lifecycles, including in-progress recovery from wall-clock deadlines.
+- Zustand coordinates and persists the three finite-state game lifecycles, including in-progress recovery from wall-clock deadlines.
 - Dexie stores custom packs in IndexedDB.
 - `vite-plugin-pwa`/Workbox precaches the application shell and supplies an offline navigation fallback.
 - Vitest and Testing Library verify rules and interaction behavior; Playwright verifies complete desktop/mobile and offline journeys.
 
 ## Offline and privacy notes
 
-MoldyParty does not transmit gameplay, sensor readings, session statistics, or custom-pack data. Charades motion events are interpreted only in the browser and are not recorded. Role reveals, ballots, and unfinished Outlier guesses are remasked after privacy is lost or a saved round is restored. Clearing browser storage, using private browsing, deleting a session, or uninstalling with site-data removal can erase local session stats, packs, no-repeat history, and in-progress rounds, so export important packs as JSON. The first visit must be online; subsequent production-build visits can load either game and saved packs from the service worker cache.
+MoldyParty does not transmit gameplay, sensor readings, session statistics, or custom-pack data. Charades motion events are interpreted only in the browser and are not recorded. Role reveals, ballots, and unfinished Outlier guesses are remasked after privacy is lost or a saved round is restored. Clearing browser storage, using private browsing, deleting a session, or uninstalling with site-data removal can erase local session stats, packs, no-repeat history, and in-progress rounds, so export important packs as JSON. The first visit must be online; subsequent production-build visits can load any game and saved packs from the service worker cache.

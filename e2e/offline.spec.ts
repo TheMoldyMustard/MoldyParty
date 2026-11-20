@@ -50,3 +50,25 @@ test('a saved custom pack remains available after an offline reload', async ({ p
   await expect(page.getByRole('heading', { name: 'Round recap' })).toBeVisible()
   await expect(page.getByText('1 point')).toBeVisible()
 })
+
+test('an active Category Bomb game recovers after an offline reload', async ({ page, context }) => {
+  await page.goto('/')
+  await page.getByRole('button', { name: 'Open Category Bomb' }).click()
+  for (const [index, name] of ['Alex', 'Blair', 'Casey'].entries()) {
+    await page.getByLabel(`Player ${index + 1} name`).fill(name)
+  }
+  await page.getByRole('checkbox', { name: /Sound/ }).uncheck()
+  await page.getByRole('checkbox', { name: /Haptics/ }).uncheck()
+  await page.getByRole('button', { name: 'Arrange players' }).click()
+  await page.getByRole('button', { name: 'Arm bomb' }).click()
+  await expect(page.getByTestId('category-bomb-arrow')).toBeVisible()
+
+  await page.evaluate(async () => { await navigator.serviceWorker.ready })
+  await page.reload()
+  await context.setOffline(true)
+  await page.reload()
+
+  await expect(page.getByRole('heading', { name: 'MoldyParty' })).toHaveCount(0)
+  await expect(page.getByTestId('category-bomb-arrow')).toBeVisible()
+  await expect(page.getByRole('button', { name: /Accept .* answer and pass/ })).toBeVisible()
+})
