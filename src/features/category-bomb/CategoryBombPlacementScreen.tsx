@@ -5,9 +5,10 @@ import { categoryBombStore } from '../../store/categoryBombStore'
 interface CategoryBombPlacementScreenProps {
   round: CategoryBombRound
   onBack: () => void
+  onArm?: () => void
 }
 
-export default function CategoryBombPlacementScreen({ round, onBack }: CategoryBombPlacementScreenProps) {
+export default function CategoryBombPlacementScreen({ round, onBack, onArm }: CategoryBombPlacementScreenProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   function choose(playerId: string) {
@@ -35,6 +36,6 @@ export default function CategoryBombPlacementScreen({ round, onBack }: CategoryB
         onClick={() => choose(player.id)}
       >{player.name}</button>)}
     </div>
-    <button className="button button--hero" type="button" onClick={() => categoryBombStore.getState().arm()}>Arm bomb</button>
+    <button className="button button--hero" type="button" onClick={() => onArm ? onArm() : categoryBombStore.getState().arm()}>Arm bomb</button>
   </main>
 }

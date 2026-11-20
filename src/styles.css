@@ -338,6 +338,8 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
 /* Forehead Charades */
 .game-card--charades { background: #e8dcff; }
 .game-card--charades .game-card__art { background: linear-gradient(145deg, #ffb25f, var(--coral)); }
+.game-card--category-bomb { background: #ffe2a8; }
+.game-card--category-bomb .game-card__art { background: linear-gradient(145deg, #ff8d83, #ffb25f); }
 .screen--charades-setup { display: grid; gap: 1rem; }
 .charades-mode-grid, .charades-pack-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .75rem; }
 .charades-mode { display: grid; gap: .35rem; min-height: 7.5rem; padding: 1rem; border: 1px solid rgb(255 255 255 / 13%); border-radius: 1rem; color: #d8cadc; background: #24112f; cursor: pointer; }
@@ -449,4 +451,32 @@ footer { color: #a88daf; text-align: center; font-size: .85rem; }
 @media (max-width: 520px) {
   .category-bomb-board { width: min(75vw, 70dvh); }
   .category-bomb-seat { width: 31%; min-height: 2.4rem; }
+}
+.category-bomb-active { position: fixed; inset: 0; min-width: 320px; overflow: hidden; display: grid; place-items: center; color: white; background: #180b20; user-select: none; touch-action: manipulation; }
+.category-bomb-active__exit { position: absolute; z-index: 10; top: max(.8rem, env(safe-area-inset-top)); left: max(.8rem, env(safe-area-inset-left)); }
+.category-bomb-active__category { position: absolute; z-index: 8; top: max(.8rem, env(safe-area-inset-top)); left: 50%; translate: -50%; display: grid; justify-items: center; gap: .2rem; text-align: center; }
+.category-bomb-active__category span { color: #ad97b4; font-size: .68rem; font-weight: 900; letter-spacing: .1em; text-transform: uppercase; }
+.category-bomb-active__category strong { max-width: 60vw; overflow-wrap: anywhere; color: var(--lime); font-size: clamp(1rem, 3.5vw, 1.6rem); }
+.category-bomb-board--active { width: min(86vw, 82dvh, 48rem); border: 0; }
+.category-bomb-board--active .category-bomb-seat { display: grid; place-items: center; border: 0; background: rgb(255 255 255 / 8%); }
+.category-bomb-seat--active { color: var(--ink); background: var(--lime) !important; box-shadow: 0 0 2rem rgb(199 243 107 / 35%); }
+.category-bomb-arrow { position: absolute; z-index: 3; inset: 47% auto auto 47%; width: 16%; color: var(--coral); font-size: clamp(3rem, 10vmin, 6rem); line-height: 1; transform-origin: 20% 50%; transition: rotate .18s ease; }
+.category-bomb-current-status { position: absolute; z-index: 4; inset: 29% 25% auto; overflow-wrap: anywhere; color: white; font-size: clamp(1rem, 3vmin, 1.4rem); font-weight: 950; text-align: center; }
+.category-bomb-button { position: absolute; z-index: 5; inset: 50% auto auto 50%; translate: -50% -50%; width: clamp(8rem, 28vmin, 13rem); aspect-ratio: 1; display: grid; place-content: center; gap: .25rem; border: .4rem solid #ffce70; border-radius: 50%; color: white; background: radial-gradient(circle at 35% 30%, #ff7a70, #9b253d 70%); box-shadow: 0 1.2rem 4rem rgb(0 0 0 / 45%); font-size: clamp(3rem, 10vmin, 6rem); cursor: pointer; }
+.category-bomb-button span { font-size: clamp(.58rem, 1.8vmin, .78rem); font-weight: 950; letter-spacing: .04em; text-transform: uppercase; }
+.category-bomb-name-only { width: min(92vw, 48rem); display: grid; place-items: center; gap: .5rem; text-align: center; }
+.category-bomb-name-only > span { color: #cbb9d0; font-size: 1rem; font-weight: 900; letter-spacing: .12em; text-transform: uppercase; }
+.category-bomb-name-only h1 { max-width: 100%; overflow-wrap: anywhere; font-size: clamp(3.5rem, 18vw, 9rem); line-height: .82; letter-spacing: -.055em; }
+.category-bomb-name-only .category-bomb-button { position: relative; inset: auto; translate: none; margin-top: 1.5rem; }
+.category-bomb-foul { position: absolute; z-index: 10; bottom: max(.8rem, env(safe-area-inset-bottom)); min-height: 3rem; border: 1px solid rgb(255 255 255 / 20%); border-radius: 999px; padding: .7rem 1rem; color: #ffd5d0; background: #4a1d2b; font-weight: 900; cursor: pointer; }
+.category-bomb-foul--holding { background: #9b253d; box-shadow: inset 0 0 0 .25rem #ff8d83; }
+.category-bomb-award { position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; color: var(--lime); background: rgb(24 11 32 / 72%); font-size: clamp(3rem, 14vw, 8rem); font-weight: 950; pointer-events: none; }
+.category-bomb-explosion { min-height: 100dvh; display: grid; place-content: center; justify-items: center; gap: 1rem; padding: max(2rem, env(safe-area-inset-top)) 1rem max(2rem, env(safe-area-inset-bottom)); text-align: center; }
+.category-bomb-explosion__icon { font-size: clamp(5rem, 22vw, 10rem); }
+.category-bomb-explosion h1 { max-width: 55rem; overflow-wrap: anywhere; font-size: clamp(3rem, 11vw, 7rem); line-height: .88; }
+.category-bomb-explosion p { color: #c8b5ce; }
+
+@media (prefers-reduced-motion: reduce) {
+  .category-bomb-arrow { transition: none; }
+  .category-bomb-award { background: #180b20; }
 }

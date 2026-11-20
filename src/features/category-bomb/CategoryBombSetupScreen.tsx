@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { deriveCategoryBombDisplayMode, validateCategoryBombSettings, type CategoryBombTurnPolicy } from '../../domain/categoryBomb'
 import { categoryBombStore } from '../../store/categoryBombStore'
+import { appStore } from '../../store/appStore'
 import { usePreferencesStore } from '../../store/preferencesStore'
 
 interface CategoryBombSetupScreenProps {
@@ -27,6 +28,7 @@ export default function CategoryBombSetupScreen({ onBack, initialPlayerNames = [
     setErrors(nextErrors)
     if (nextErrors.length > 0) return
     categoryBombStore.getState().startSetup(names, turnPolicy)
+    appStore.getState().setActiveGame('category-bomb')
   }
 
   return <main className="screen screen--category-bomb-setup">
