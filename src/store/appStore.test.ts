@@ -15,8 +15,17 @@ describe('app store', () => {
   })
 
   it('infers a legacy active Impostor game but rejects stale explicit pointers', () => {
-    expect(resolveActiveGame(null, true, false)).toBe('impostor')
-    expect(resolveActiveGame('charades', true, false)).toBeNull()
-    expect(resolveActiveGame('charades', false, true)).toBe('charades')
+    expect(resolveActiveGame(null, true, false, false)).toBe('impostor')
+    expect(resolveActiveGame('charades', true, false, false)).toBeNull()
+    expect(resolveActiveGame('charades', false, true, false)).toBe('charades')
+    expect(resolveActiveGame('category-bomb', false, false, true)).toBe('category-bomb')
+    expect(resolveActiveGame(null, false, false, true)).toBe('category-bomb')
+  })
+
+  it('normalizes an unknown persisted active game id', async () => {
+    localStorage.setItem('app-invalid-test', JSON.stringify({ state: { activeGameId: 'unknown' }, version: 2 }))
+    const restored = createAppStore('app-invalid-test', localStorage)
+    await restored.persist.rehydrate()
+    expect(restored.getState().activeGameId).toBeNull()
   })
 })
