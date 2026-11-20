@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import CategoryBombSetupScreen from './CategoryBombSetupScreen'
 import CategoryBombPlacementScreen from './CategoryBombPlacementScreen'
@@ -59,10 +59,34 @@ describe('Category Bomb setup and pre-round screens', () => {
     render(<CategoryBombPlacementScreen round={before} onBack={() => undefined} />)
     expect(screen.getByTestId('category-bomb-placement-arrow')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: `Move ${first.name}` }))
+    expect(screen.getByTestId('category-bomb-placement-arrow').style.rotate).toMatch(/deg/)
     await user.click(screen.getByRole('button', { name: `Swap with ${second.name}` }))
+    expect(screen.getByRole('status')).toHaveTextContent(`${first.name} and ${second.name} swapped`)
     expect(categoryBombStore.getState().round?.settings.players[0].seat).toBe(second.seat)
     await user.click(screen.getByRole('button', { name: 'Arm bomb' }))
     expect(categoryBombStore.getState().round?.phase).toBe('ACTIVE')
+  })
+
+  it('counts player-name length consistently for supplementary characters', async () => {
+    const user = userEvent.setup()
+    render(<CategoryBombSetupScreen onBack={() => undefined} initialPlayerNames={['Alex', 'Blair']} />)
+    const input = screen.getByLabelText('Player 1 name')
+    await user.clear(input)
+    await user.type(input, '😀'.repeat(24))
+    expect(input).toHaveValue('😀'.repeat(24))
+  })
+
+  it('supports drag swapping while announcing the result', () => {
+    categoryBombStore.getState().startSetup(names(4), 'fair-cycle')
+    const before = categoryBombStore.getState().round!
+    const [first, second] = before.settings.players
+    render(<CategoryBombPlacementScreen round={before} onBack={() => undefined} />)
+    fireEvent.dragStart(screen.getByRole('button', { name: `Move ${first.name}` }))
+    const target = screen.getByRole('button', { name: `Swap with ${second.name}` })
+    fireEvent.dragOver(target)
+    fireEvent.drop(target)
+    expect(categoryBombStore.getState().round?.settings.players[0].seat).toBe(second.seat)
+    expect(screen.getByRole('status')).toHaveTextContent(`${first.name} and ${second.name} swapped`)
   })
 
   it('renders no seats or arrow in large-group ready mode', async () => {

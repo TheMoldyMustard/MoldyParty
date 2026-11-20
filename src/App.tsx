@@ -18,8 +18,10 @@ import { useCharadesStore } from './store/charadesStore'
 import CategoryBombSetupScreen from './features/category-bomb/CategoryBombSetupScreen'
 import CategoryBombGame from './features/category-bomb/CategoryBombGame'
 import { categoryBombStore, useCategoryBombStore } from './store/categoryBombStore'
+import type { CategoryBombTurnPolicy } from './domain/categoryBomb'
 
 type AppView = 'home' | 'sessions' | 'lobby' | 'packs' | 'charades' | 'charades-packs' | 'category-bomb'
+type CategoryBombDraft = { playerNames: string[]; turnPolicy: CategoryBombTurnPolicy }
 
 function AppContent() {
   const [view, setView] = useState<AppView>('home')
@@ -27,6 +29,7 @@ function AppContent() {
   const [preferredPackId, setPreferredPackId] = useState<string | null>(null)
   const [preferredCharadesPackId, setPreferredCharadesPackId] = useState<string | null>(null)
   const [lobbyNotice, setLobbyNotice] = useState('')
+  const [categoryBombDraft, setCategoryBombDraft] = useState<CategoryBombDraft | null>(null)
   const game = useGameStore((state) => state.game)
   const changeCategory = useGameStore((state) => state.changeCategory)
   const returnToLobby = useGameStore((state) => state.returnToLobby)
@@ -41,8 +44,14 @@ function AppContent() {
 
   if (activeGame === 'charades' && charadesSession) return <CharadesGame onExit={() => setView('home')} />
   if (activeGame === 'category-bomb' && categoryBombRound) return <CategoryBombGame
-    onExit={() => { categoryBombStore.getState().reset(); appStore.getState().setActiveGame(null); setView('home') }}
-    onSetup={() => { categoryBombStore.getState().reset(); appStore.getState().setActiveGame(null); setView('category-bomb') }}
+    onExit={() => { categoryBombStore.getState().reset(); appStore.getState().setActiveGame(null); setCategoryBombDraft(null); setView('home') }}
+    onSetup={() => {
+      const round = categoryBombStore.getState().round
+      if (round) setCategoryBombDraft({ playerNames: round.settings.players.map((player) => player.name), turnPolicy: round.settings.turnPolicy })
+      categoryBombStore.getState().reset()
+      appStore.getState().setActiveGame(null)
+      setView('category-bomb')
+    }}
   />
 
   if (activeGame === 'impostor' && game?.phase === 'GAME_OVER') return <GameOverScreen
@@ -72,7 +81,11 @@ function AppContent() {
   if (view === 'packs') return <main className="screen"><nav className="topbar"><button className="text-button" onClick={() => setView('lobby')}>← Back to setup</button></nav><PackManager onImported={(packId) => { setPreferredPackId(packId); setLobbyNotice('Pack imported and ready in your round.'); setView('lobby') }} /></main>
   if (view === 'charades') return <CharadesSetupScreen preferredPackId={preferredCharadesPackId} onBack={() => { appStore.getState().setActiveGame(null); setView('home') }} onManagePacks={() => setView('charades-packs')} />
   if (view === 'charades-packs') return <main className="screen"><nav className="topbar"><button className="text-button" onClick={() => setView('charades')}>← Back to Charades</button></nav><PackManager onImported={(packId) => { setPreferredCharadesPackId(packId); setView('charades') }} /></main>
-  if (view === 'category-bomb') return <CategoryBombSetupScreen onBack={() => { appStore.getState().setActiveGame(null); setView('home') }} />
+  if (view === 'category-bomb') return <CategoryBombSetupScreen
+    initialPlayerNames={categoryBombDraft?.playerNames}
+    initialTurnPolicy={categoryBombDraft?.turnPolicy}
+    onBack={() => { appStore.getState().setActiveGame(null); setCategoryBombDraft(null); setView('home') }}
+  />
 
   return (
     <main className="app-shell">
@@ -112,7 +125,7 @@ function AppContent() {
           <span className="pill">New game</span>
           <h2 id="category-bomb-title">Category Bomb</h2>
           <p>Name it, tap it, and pass before the hidden timer explodes.</p>
-          <button type="button" onClick={() => { appStore.getState().setActiveGame('category-bomb'); setView('category-bomb') }}>Open Category Bomb <span aria-hidden="true">→</span></button>
+          <button type="button" onClick={() => { setCategoryBombDraft(null); appStore.getState().setActiveGame('category-bomb'); setView('category-bomb') }}>Open Category Bomb <span aria-hidden="true">→</span></button>
         </div>
       </section>
 

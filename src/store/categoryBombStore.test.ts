@@ -65,4 +65,17 @@ describe('Category Bomb store', () => {
     expect(restored.getState().round).toBeNull()
     expect(localStorage.getItem('unrelated')).toBe('keep')
   })
+
+  it('drops an active snapshot whose fair-cycle queue contains an unknown player', async () => {
+    const source = createCategoryBombStore('category-bomb-invalid-queue', () => 0, localStorage, () => 1_000)
+    source.getState().startSetup(names(3), 'fair-cycle')
+    source.getState().arm(1_000)
+    const saved = JSON.parse(localStorage.getItem('category-bomb-invalid-queue')!)
+    saved.state.round.remainingCyclePlayerIds = ['missing-player']
+    localStorage.setItem('category-bomb-invalid-queue', JSON.stringify(saved))
+
+    const restored = createCategoryBombStore('category-bomb-invalid-queue', () => 0, localStorage, () => 1_000)
+    await restored.persist.rehydrate()
+    expect(restored.getState().round).toBeNull()
+  })
 })

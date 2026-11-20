@@ -45,10 +45,10 @@ const seats: CategoryBombSeat[] = [
 ]
 
 const seatAngles: Record<CategoryBombSeat, number> = {
-  'top-left': -135, 'top-center': -90, 'top-right': -45,
-  'right-top': -45, 'right-center': 0, 'right-bottom': 45,
-  'bottom-right': 45, 'bottom-center': 90, 'bottom-left': 135,
-  'left-bottom': 135, 'left-center': 180, 'left-top': -135,
+  'top-left': -135, 'top-center': -90, 'top-right': -60,
+  'right-top': -30, 'right-center': 0, 'right-bottom': 30,
+  'bottom-right': 60, 'bottom-center': 90, 'bottom-left': 135,
+  'left-bottom': 150, 'left-center': 180, 'left-top': -150,
 }
 
 const seatTemplates: Partial<Record<number, number[]>> = {
@@ -267,5 +267,9 @@ export function replayCategoryBombRound(
 export function getCategoryBombArrowAngle(round: CategoryBombRound): number | null {
   if (round.displayMode !== 'radial' || !round.currentPlayerId) return null
   const seat = round.settings.players.find((player) => player.id === round.currentPlayerId)?.seat
-  return seat ? seatAngles[seat] : null
+  return seat ? getCategoryBombSeatAngle(seat) : null
+}
+
+export function getCategoryBombSeatAngle(seat: CategoryBombSeat): number {
+  return seatAngles[seat]
 }

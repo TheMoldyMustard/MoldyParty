@@ -28,4 +28,11 @@ describe('app store', () => {
     await restored.persist.rehydrate()
     expect(restored.getState().activeGameId).toBeNull()
   })
+
+  it('migrates the compatible active-game discriminator from version one', async () => {
+    localStorage.setItem('app-v1-test', JSON.stringify({ state: { activeGameId: 'charades' }, version: 1 }))
+    const restored = createAppStore('app-v1-test', localStorage)
+    await restored.persist.rehydrate()
+    expect(restored.getState().activeGameId).toBe('charades')
+  })
 })

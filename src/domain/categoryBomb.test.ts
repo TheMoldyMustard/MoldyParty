@@ -80,6 +80,15 @@ describe('Category Bomb validation and display modes', () => {
     const armed = armCategoryBombRound(swapped, () => 0, 1_000)
     expect(getCategoryBombArrowAngle(armed)).toBeTypeOf('number')
   })
+
+  it('gives every radial seat a distinct arrow target', () => {
+    const round = createCategoryBombRound(settings(12), categoryBombPrompts, () => 0)
+    const angles = round.settings.players.map((player) => getCategoryBombArrowAngle({
+      ...round,
+      currentPlayerId: player.id,
+    }))
+    expect(new Set(angles).size).toBe(12)
+  })
 })
 
 describe('Category Bomb timer and turn policies', () => {

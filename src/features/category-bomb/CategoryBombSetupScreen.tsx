@@ -7,11 +7,12 @@ import { usePreferencesStore } from '../../store/preferencesStore'
 interface CategoryBombSetupScreenProps {
   onBack: () => void
   initialPlayerNames?: string[]
+  initialTurnPolicy?: CategoryBombTurnPolicy
 }
 
-export default function CategoryBombSetupScreen({ onBack, initialPlayerNames = ['', '', ''] }: CategoryBombSetupScreenProps) {
+export default function CategoryBombSetupScreen({ onBack, initialPlayerNames = ['', '', ''], initialTurnPolicy = 'fair-cycle' }: CategoryBombSetupScreenProps) {
   const [names, setNames] = useState(initialPlayerNames)
-  const [turnPolicy, setTurnPolicy] = useState<CategoryBombTurnPolicy>('fair-cycle')
+  const [turnPolicy, setTurnPolicy] = useState<CategoryBombTurnPolicy>(initialTurnPolicy)
   const [errors, setErrors] = useState<string[]>([])
   const soundEnabled = usePreferencesStore((state) => state.soundEnabled)
   const hapticsEnabled = usePreferencesStore((state) => state.hapticsEnabled)
@@ -41,7 +42,10 @@ export default function CategoryBombSetupScreen({ onBack, initialPlayerNames = [
         {names.map((name, index) => <div className="player-input" key={index}>
           <span className="player-number" aria-hidden="true">{index + 1}</span>
           <label className="sr-only" htmlFor={`category-player-${index}`}>Player {index + 1} name</label>
-          <input id={`category-player-${index}`} maxLength={24} value={name} placeholder={`Player ${index + 1}`} autoComplete="off" onChange={(event) => setNames((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} />
+          <input id={`category-player-${index}`} value={name} placeholder={`Player ${index + 1}`} autoComplete="off" onChange={(event) => {
+            const nextName = [...event.target.value].slice(0, 24).join('')
+            setNames((current) => current.map((item, itemIndex) => itemIndex === index ? nextName : item))
+          }} />
           {names.length > 2 && <button className="icon-button" type="button" aria-label={`Remove player ${index + 1}`} onClick={() => setNames((current) => current.filter((_, itemIndex) => itemIndex !== index))}>×</button>}
         </div>)}
       </div>

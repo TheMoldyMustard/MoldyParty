@@ -28,13 +28,14 @@ export function createAppStore(storageName = 'moldyparty-app', storage: StateSto
     name: storageName,
     storage: jsonStorage(storage),
     version: 2,
+    migrate: (persisted) => persisted,
     partialize: (state) => ({ activeGameId: state.activeGameId }),
     merge: (persisted, current) => {
       const saved = persisted && typeof persisted === 'object' ? persisted as Partial<AppStoreState> : {}
       const activeGameId = ['impostor', 'charades', 'category-bomb'].includes(String(saved.activeGameId))
         ? saved.activeGameId as AppGameId
         : null
-      return { ...current, ...saved, activeGameId, recoveryNotice: '' }
+      return { ...current, activeGameId, recoveryNotice: '' }
     },
   }))
 }

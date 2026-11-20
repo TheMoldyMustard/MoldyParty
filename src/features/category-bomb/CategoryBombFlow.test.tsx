@@ -5,6 +5,7 @@ import App from '../../App'
 import { appStore } from '../../store/appStore'
 import { categoryBombStore } from '../../store/categoryBombStore'
 import CategoryBombGame from './CategoryBombGame'
+import type { CategoryBombDeviceController } from './useCategoryBombDevices'
 
 function names(count: number): string[] {
   return Array.from({ length: count }, (_, index) => `Player ${index + 1}`)
@@ -48,6 +49,15 @@ describe('Category Bomb flow', () => {
     expect(screen.getByText(/'s turn$/)).not.toHaveTextContent(firstName)
   })
 
+  it('accepts only once when the bomb is double-clicked', async () => {
+    start(4)
+    const token = categoryBombStore.getState().round!.actionToken
+    const user = userEvent.setup()
+    render(<CategoryBombGame onExit={() => undefined} onSetup={() => undefined} />)
+    await user.dblClick(screen.getByRole('button', { name: /accept .* answer and pass/i }))
+    expect(categoryBombStore.getState().round?.actionToken).toBe(token + 1)
+  })
+
   it('renders only the current name for thirteen players with no arrow or perimeter roster', () => {
     start(13)
     const currentName = categoryBombStore.getState().round!.settings.players.find((player) => player.id === categoryBombStore.getState().round!.currentPlayerId)!.name
@@ -78,6 +88,17 @@ describe('Category Bomb flow', () => {
     expect(categoryBombStore.getState().round?.explosionReason).toBe('foul')
   })
 
+  it('cancels a keyboard foul hold with Escape', () => {
+    vi.useFakeTimers()
+    start(3)
+    render(<CategoryBombGame onExit={() => undefined} onSetup={() => undefined} />)
+    const foul = screen.getByRole('button', { name: /hold to explode/i })
+    fireEvent.keyDown(foul, { key: ' ' })
+    fireEvent.keyDown(foul, { key: 'Escape' })
+    act(() => vi.advanceTimersByTime(600))
+    expect(categoryBombStore.getState().round?.phase).toBe('ACTIVE')
+  })
+
   it('reconciles timer expiry and replays with the same roster', () => {
     vi.useFakeTimers()
     vi.setSystemTime(10_000)
@@ -91,11 +112,59 @@ describe('Category Bomb flow', () => {
     expect(categoryBombStore.getState().round?.settings.players).toHaveLength(3)
   })
 
+  it('restarts devices and announces each re-armed explosion', () => {
+    vi.useFakeTimers()
+    start(3)
+    const devices: CategoryBombDeviceController = {
+      start: vi.fn(async () => undefined),
+      playAccept: vi.fn(),
+      playExplosion: vi.fn(),
+      stop: vi.fn(async () => undefined),
+    }
+    render(<CategoryBombGame onExit={() => undefined} onSetup={() => undefined} deviceController={devices} />)
+    const explode = () => {
+      fireEvent.pointerDown(screen.getByRole('button', { name: /hold to explode/i }))
+      act(() => vi.advanceTimersByTime(600))
+    }
+
+    explode()
+    expect(devices.playExplosion).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Rearrange players' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Arm bomb' }))
+    explode()
+    expect(devices.playExplosion).toHaveBeenCalledTimes(2)
+    fireEvent.click(screen.getByRole('button', { name: 'New bomb' }))
+    expect(categoryBombStore.getState().round?.phase).toBe('ACTIVE')
+    expect(devices.start).toHaveBeenCalled()
+  })
+
   it('recovers an explicitly active Category Bomb round through the app shell', () => {
     start(3)
     appStore.setState({ activeGameId: 'category-bomb' })
     render(<App />)
     expect(screen.getByText(categoryBombStore.getState().round!.categoryLabel)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /accept .* answer and pass/i })).toBeInTheDocument()
+  })
+
+  it('keeps the roster and turn policy when returning from placement to setup', async () => {
+    categoryBombStore.getState().startSetup(['Alex', 'Blair', 'Casey', 'Devon'], 'chaos')
+    appStore.setState({ activeGameId: 'category-bomb' })
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: '← Setup' }))
+    expect(screen.getByLabelText('Player 1 name')).toHaveValue('Alex')
+    expect(screen.getAllByRole('textbox')).toHaveLength(4)
+    expect(screen.getByRole('radio', { name: /^Chaos/ })).toBeChecked()
+  })
+
+  it('keeps a large roster when returning from ready to setup', async () => {
+    categoryBombStore.getState().startSetup(names(13), 'fair-cycle')
+    appStore.setState({ activeGameId: 'category-bomb' })
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('button', { name: '← Setup' }))
+    expect(screen.getAllByRole('textbox')).toHaveLength(13)
+    expect(screen.getByLabelText('Player 13 name')).toHaveValue('Player 13')
+    expect(screen.getByRole('radio', { name: /^Fair cycle/ })).toBeChecked()
   })
 })
