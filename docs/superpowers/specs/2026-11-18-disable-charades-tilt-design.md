@@ -8,7 +8,7 @@ Temporarily prevent players from enabling the unreliable Forehead Charades tilt 
 
 - Keep the Tilt controls setting visible, unchecked, and disabled.
 - Label it **Tilt controls — Work in progress** and direct players to use taps for now.
-- Force every newly created Charades session to use `motionEnabled: false`.
+- Force every newly created Charades session to use `motionEnabled: false` and prevent recovered legacy sessions from starting motion services.
 - Preserve tap, keyboard, sound, haptics, and all other Charades behavior.
 
 ## Non-goals
@@ -25,4 +25,4 @@ Temporarily prevent players from enabling the unreliable Forehead Charades tilt 
 
 ## Design
 
-`CharadesSetupScreen` renders a disabled, unchecked Tilt controls checkbox with the requested work-in-progress copy. Session construction supplies the literal `false` for `motionEnabled`. A setup integration test verifies both the user-visible disabled state and the session created after Start game.
+`CharadesSetupScreen` renders a disabled, unchecked Tilt controls checkbox with the requested work-in-progress copy. Session construction supplies the literal `false` for `motionEnabled`, and `GetReadyScreen` also passes `false` to the device controller as a runtime kill switch for recovered legacy sessions. Integration tests verify the visible disabled state, new-session settings, and the recovered-session boundary.

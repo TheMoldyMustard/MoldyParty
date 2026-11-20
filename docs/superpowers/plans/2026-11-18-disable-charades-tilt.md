@@ -32,6 +32,8 @@
 **Files:**
 - Modify: `src/features/charades/CharadesFlow.test.tsx`
 - Modify: `src/features/charades/CharadesSetupScreen.tsx`
+- Modify: `src/features/charades/GetReadyScreen.test.tsx`
+- Modify: `src/features/charades/GetReadyScreen.tsx`
 
 **Interfaces:**
 - Consumes: `CharadesSettings.motionEnabled: boolean`
@@ -49,7 +51,7 @@ Expected: FAIL because the existing Tilt controls checkbox is enabled, checked, 
 
 - [ ] **Step 3: Implement the setup guard**
 
-Remove mutable `motionEnabled` setup state. Render the Tilt controls checkbox with `checked={false}` and `disabled`, use the label `Tilt controls — Work in progress`, show `Use tap controls for now`, and construct settings with `motionEnabled: false`.
+Remove mutable `motionEnabled` setup state. Render the Tilt controls checkbox with `checked={false}` and `disabled`, use the label `Tilt controls — Work in progress`, show `Use tap controls for now`, construct settings with `motionEnabled: false`, and pass `motionEnabled: false` to device startup for recovered legacy sessions.
 
 - [ ] **Step 4: Verify focused and full checks**
 
