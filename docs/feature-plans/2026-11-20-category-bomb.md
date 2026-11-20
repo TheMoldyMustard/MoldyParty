@@ -6,7 +6,7 @@
 
 ## 1. Decision summary and feature brief
 
-Add **Category Bomb** as a third, standalone MoldyParty game with two automatic display modes. Groups of 2–12 arrange their names into fixed seats around a full-screen radial board, place the phone flat where everyone can reach it, and follow a center arrow toward the active player's seat. Groups of 13 or more skip radial placement and use **Large group / name-only mode**: the active player's name is shown prominently in the center instead of an arrow or perimeter name tags, and the phone is passed to that named person. Both modes start a round with a category and a secret, randomized deadline. An accepted answer is self-moderated: the active player taps the center bomb, receives a very short deadline extension, and the game selects the next player. When the hidden deadline expires, or the group calls an invalid/repeated answer, the current player is shown as exploded.
+Add **Category Bomb** as a third, standalone MoldyParty game with two automatic display modes. Groups of 2–12 arrange their names into fixed seats around a full-screen radial board, place the phone flat where everyone can reach it, and follow a center arrow toward the active player's seat. Groups of 13 or more skip radial placement and use **Large group / name-only mode**: the active player's name is shown prominently in the center instead of an arrow or perimeter name tags, and the phone is passed to that named person. Both modes start a round with a category and a secret, randomized deadline. An accepted answer is self-moderated: the active player taps the center bomb, the game selects the next player, and—only when enabled in setup—the deadline receives a randomly sampled bonus from the configured seconds range. The pass-time bonus is off by default. When the hidden deadline expires, or the group calls an invalid/repeated answer, the current player is shown as exploded.
 
 **Recommendation:** implement a pure `categoryBomb` domain plus an isolated persisted Zustand store and feature screens. Reuse only established app-shell, deadline/recovery, sound, haptics, wake-lock, responsive, and test patterns. Do not implement Category Bomb as a Charades mode: Charades advances answer cards and scores fixed turns, while Category Bomb keeps one category, changes players, hides its deadline, and ends on one explosion.
 
@@ -23,7 +23,7 @@ The default turn policy is a shuffled **Fair cycle**: every player appears once 
 - A radial active board with three player seats on each of four sides. Text faces outward in four directions; each corner contains the endpoint labels from its two adjoining sides.
 - In Large group mode, no seating-placement step, perimeter names, or directional arrow. The active player's name is the primary center content and is updated atomically on each accepted answer.
 - A built-in offline category-prompt list and a different random category on replay when another category is available.
-- A randomized, player-count-relative, hidden wall-clock deadline; a short extension on each accepted answer; exact once-only expiry; refresh/background recovery; and no visible or accessibility-exposed countdown.
+- A randomized, player-count-relative, hidden wall-clock deadline; an optional per-pass random extension configured as a minimum/maximum seconds range and disabled by default; exact once-only expiry; refresh/background recovery; and no visible or accessibility-exposed countdown.
 - Fair-cycle and Chaos turn policies.
 - Self-moderation: center bomb tap accepts an answer; a deliberate press-and-hold **Foul** control immediately explodes the current player for a repeat or invalid answer. Hesitation is handled by the hidden timer.
 - Generated audio, optional haptics, advisory wake lock, reduced-motion treatment, safe-area layout, keyboard-accessible controls, and offline behavior.
@@ -49,7 +49,7 @@ Category Bomb needs no account, server, microphone, camera, location, or sensor 
 - **Product call:** long names are limited to 24 trimmed characters, wrap to at most two lines, and scale with `clamp()`. Full names remain available to assistive technology, in the placement editor for Radial mode, and in the central name display for Large group mode.
 - **Product call:** display mode is derived, not user-selectable: `playerCount <= 12` means `radial`; `playerCount >= 13` means `name-only`. This prevents a saved setup from claiming a layout incompatible with its roster.
 - **Product call:** Fair cycle prevents an immediate same-player handoff at a cycle boundary while otherwise reshuffling freely. In Chaos mode, any player other than the current player may be next; repeats before full coverage are allowed.
-- **Product call:** initial duration is uniformly sampled in whole seconds from `20 + 3 × playerCount` through `30 + 5 × playerCount` (29–45 seconds for 3 players; 56–90 seconds for 12). Every accepted answer adds 1.5 seconds, capped at 15 seconds of total extension per round. These constants live in the domain module and are covered by boundary tests so playtesting can tune them without touching UI code.
+- **Product call:** initial duration is uniformly sampled in whole seconds from `20 + 3 × playerCount` through `30 + 5 × playerCount` (29–45 seconds for 3 players; 56–90 seconds for 12). Pass-time bonus is disabled by default. When enabled, setup defaults to a **0.5–3.0 second** inclusive range, accepts **0.0–10.0 seconds** in 0.1-second increments, requires `minimum <= maximum`, and samples uniformly in integer 100 ms units. The applied total remains capped at **15 seconds per round**.
 - **Product call:** “invalid answer detonates the bomb” is represented by a 600 ms press-and-hold Foul action. A normal click does not detonate, and visible hold progress plus cancel-on-pointer-leave reduces accidental fouls.
 - **Open product decision, non-blocking for architecture:** final category copy, count, locale mix, and difficulty balance require playtesting. Start with a reviewed built-in list of broad prompts such as Animals, Countries, Foods, Movie Titles, and Things in a Kitchen; do not derive these from existing answer-card pack names.
 
@@ -93,7 +93,7 @@ Display-mode branch
 categoryBombStore (persisted absolute deadline and shuffle state)
    ↓
 CategoryBombActiveScreen
-   ├─ acceptAnswer(token, now) → +1.5s (capped) → choose next player
+   ├─ acceptAnswer(token, now, random) → optional sampled bonus (capped) → choose next player
    ├─ callFoul(token, now) ───────────────────────┐
    └─ syncClock(now) on interval/focus/visibility │
                                                    ↓
@@ -109,7 +109,7 @@ CategoryBombExplosionScreen ← deadline expiry / foul
 | `appStore` | Resolve three optional active states, validate persisted discriminator on hydration, and keep deterministic legacy fallback ordering. Bump persistence version only if validation/migration is added. |
 | `App.tsx` | Add Category Bomb setup, conditional placement/ready views, active session selector/branch, home card, exit/reset behavior, and recovery. Keep Impostor/Charades branches unchanged. |
 | Category data | Add a static typed `CategoryBombPrompt[]` module. Prompt IDs, display text, and optional difficulty/tag fields are separate from `WordPack`/Dexie. |
-| Domain engine | Own validation, derived display mode, Radial seat assignment validity, duration sampling, category selection, turn queues, token/race rejection, extension cap, deadline expiry, foul result, and replay construction as pure functions. |
+| Domain engine | Own validation, derived display mode, Radial seat assignment validity, duration and pass-bonus sampling, category selection, turn queues, token/race rejection, extension cap, deadline expiry, foul result, and replay construction as pure functions. |
 | Store | Inject random/clock/storage, persist the recoverable session under a new key, expose semantic commands, reject corrupt data, and reconcile elapsed deadlines during hydration. |
 | Setup/placement UI | Collect settings; enforce player constraints; expose Fair cycle versus Chaos; arrange 2–12 names around the board; automatically replace placement with a ready screen at 13+; explain the active layout and self-moderation; unlock audio/acquire wake lock only from the Arm bomb gesture. |
 | Active/result UI | In Radial mode render category, perimeter names, arrow, bomb, Foul hold control, explosion result, and replay/exit actions. In Large group mode render category, current name, bomb, Foul, and results with no arrow or perimeter roster. Never render deadline, remaining seconds, progress, countdown ticks, or hidden timer values in ARIA text. |
@@ -143,7 +143,7 @@ CategoryBombExplosionScreen ← deadline expiry / foul
 - **Large rosters cannot be represented directionally around one phone.** At 13+, only the current name is rendered during play; rendering a tiny perimeter roster or a meaningless arrow would undermine the requested fallback.
 - **An unbounded setup roster can become unwieldy.** Keep stable IDs, avoid quadratic validation/render work, test at least 50 players, and report practical limits from measured device evidence rather than inventing a silent cap.
 - **A hidden random deadline is easy to accidentally leak.** Do not reuse Charades countdown UI/cues, CSS urgency state, or accessibility announcements.
-- **Deadline extension can make a round effectively endless.** A 15-second total extension cap keeps the user's requested leeway while preserving a bounded explosion window.
+- **Configurable deadline extension can make a round effectively endless.** A 10-second per-pass input ceiling, 100 ms sampling, and 15-second total extension cap preserve a bounded explosion window.
 - **Foul input can be accidental or socially contentious.** Use hold-to-confirm, show the current player's name in the control copy, and record only a reason—not who called it.
 - **Background throttling pauses intervals.** Absolute deadline reconciliation on focus/visibility/hydration is mandatory.
 - **Persisted corruption or old app pointers can blank the shell.** Validate both app discriminator and Category Bomb session shape, failing safely to setup/home.
@@ -175,6 +175,9 @@ interface CategoryBombPlayer { id: string; name: string; seat: CategoryBombSeat 
 interface CategoryBombSettings {
   players: CategoryBombPlayer[]
   turnPolicy: CategoryBombTurnPolicy
+  passTimeBonusEnabled: boolean
+  passTimeBonusMinMs: number
+  passTimeBonusMaxMs: number
 }
 interface CategoryBombRound {
   id: string
@@ -187,6 +190,7 @@ interface CategoryBombRound {
   remainingCyclePlayerIds: string[]
   deadlineMs: number | null
   extensionGrantedMs: number
+  lastAppliedPassBonusMs: number
   actionToken: number
   explodedPlayerId: string | null
   explosionReason: CategoryBombExplosionReason | null
@@ -212,7 +216,7 @@ Keep random sampling and IDs injectable. Derive and validate `displayMode` from 
 3. **Arm bomb** is the required user gesture in either branch: select a category, sample duration, build turn state, unlock sound, request wake lock, and enter `ACTIVE`.
 4. In Fair cycle, shuffle all player IDs, shift the first as current, and retain the remainder. On accepted answer, shift again; when empty, reshuffle all IDs and rotate the order if the outgoing current player would be first.
 5. In Chaos, sample uniformly from all player IDs except the outgoing current player.
-6. `acceptAnswer(round, token, now, random)` first synchronizes expiry. If still active and token matches, add `min(1_500, 15_000 - extensionGrantedMs)` to `deadlineMs`, select next player, and increment `actionToken` atomically.
+6. `acceptAnswer(round, token, now, random)` first synchronizes expiry. If still active and token matches, sample uniformly from the inclusive configured 100 ms range only when enabled, apply no more than the remaining 15-second cap allowance, record the actual applied value for feedback, select the next player, and increment `actionToken` atomically. Disabled, stale, and late passes consume no bonus random draw.
 7. `callFoul(round, token, now)` first synchronizes expiry. If active and current, set `EXPLODED`, retain the current player as exploded, and set reason `foul`.
 8. `syncClock(round, now)` sets the current player as exploded with reason `timer` when the absolute deadline is reached.
 9. **New bomb** retains names, display mode, Radial seats when applicable, and policy; picks another category when possible; resets extensions/queue/result; samples a new deadline; and starts from another random player without promising exclusion across rounds.
@@ -224,7 +228,7 @@ Keep random sampling and IDs injectable. Derive and validate `displayMode` from 
 - **Large group ready:** “Pass the phone to the name shown. The arrow and seating board are hidden for large groups.” Show category/rules and Arm bomb; do not show a fake placement preview.
 - **Radial active:** show category, central arrow, all 2–12 name tags, and a large semantic button labeled `Accept {name}'s answer and pass`.
 - **Large group active:** show `Pass to` plus the current player's name as the largest text, the category, and the same semantic bomb button. Do not render an arrow, angle, empty seat grid, or full roster.
-- **Both active layouts:** a brief `+1.5s` visual may appear for at most 300 ms; it reveals only the fixed award, never remaining time. Disable extension copy after the cap is reached without revealing deadline state.
+- **Both active layouts:** when enabled and the actual applied bonus is positive, briefly show `+{actualSeconds}s` for at most 300 ms; reveal only the applied award, never remaining time. Show no bonus copy while disabled or after the cap is exhausted.
 - **Foul:** separate hold control labeled `Hold to explode {name} for an invalid or repeated answer`. Keyboard users hold Space/Enter for the same duration; Escape/pointer cancellation aborts the hold.
 - **Explosion:** generated cue, non-strobing flash, optional distinct vibration, “{name} got exploded,” reason copy, New bomb, Rearrange players, and Exit.
 - **Accessibility:** in Radial mode the arrow is decorative and the active player's name is exposed as text/status. All rotated names retain normal DOM reading order and unrotated accessible labels. In Large group mode the central name is the status and focus/announcement target; no hidden arrow description is emitted. Reduced motion removes arrow spin/flash animation but not state text.
@@ -271,7 +275,7 @@ No backend API, event, job, database migration, auth policy, or external consume
 1. Define prompts, players, display modes, optional seats, settings, phases, reasons, and validation.
 2. Implement the 12/13 display threshold, balanced Radial seat allocation, seat/arrow geometry metadata, Name-only seat clearing, duration sampling, category selection, and replay category avoidance.
 3. Implement Fair cycle and Chaos selection with deterministic injected random tests.
-4. Implement accept/foul/expiry/replay transitions, extension/cap arithmetic, action tokens, and exact boundary precedence.
+4. Implement accept/foul/expiry/replay transitions, enabled/disabled random-bonus behavior, extension/cap arithmetic, action tokens, and exact boundary precedence.
 
 ### Phase 3 — Persisted command store and recovery
 
@@ -296,7 +300,7 @@ No backend API, event, job, database migration, auth policy, or external consume
 **Owners:** new `CategoryBombGame.tsx`, `CategoryBombActiveScreen.tsx`, `CategoryBombExplosionScreen.tsx`, `useCategoryBombDevices.ts`; neutralized/shared device adapters as needed; component tests; `src/styles.css`.
 
 1. Render the full Radial board and a separate Large group central-name board, each with semantic active-player status and no timer leakage.
-2. Implement answer tap debounce/token handling, short fixed-award flash, conditional Radial arrow transition, Name-only live-name update, and 200 ms clock reconciliation plus focus/page-show/visibility listeners.
+2. Implement answer tap debounce/token handling, conditional actual-award flash, conditional Radial arrow transition, Name-only live-name update, and 200 ms clock reconciliation plus focus/page-show/visibility listeners.
 3. Implement cancelable 600 ms Foul hold for pointer and keyboard, including expiry races.
 4. Add accepted/explosion audio and haptic patterns, wake-lock lifecycle, reduced motion, and cleanup.
 
@@ -330,7 +334,7 @@ No backend API, event, job, database migration, auth policy, or external consume
 | Chaos mode | Deterministic domain tests | Current player is excluded; a previous player may recur before full roster coverage. |
 | Random duration | Boundary/distribution-seam tests | Sample is inclusive and within formula bounds for 2, 12, 13, and 50 players; invalid random edge values are clamped safely. |
 | Hidden timer | DOM/accessibility/component/E2E inspection | No remaining time, deadline, progress, urgency class, or countdown tick is visible or announced during active play. |
-| Answer extension | Fake clock domain/store tests | Accepted answer before deadline adds exactly 1.5 seconds until 15-second cap, selects next player once, and rejects stale/double/late actions. |
+| Pass-time bonus | Fake random/clock domain/store/component tests | New setup is disabled with retained 0.5–3.0-second values. Enabled passes sample inclusive 100 ms values, apply only the remaining 15-second cap allowance, show the actual award, and reject malformed ranges and stale/double/late actions. |
 | Expiry | Fake clock + hydration tests | `now >= deadlineMs` explodes the current player exactly once; background/refresh produces the same result without re-rolling. |
 | Invalid/repeat | Hold-control component tests | Foul fires only after uninterrupted 600 ms, is cancelable, labels the active player, loses to prior timer expiry, and records reason `foul`. |
 | Explosion/replay | Domain/component/E2E | Correct player and reason shown; New bomb retains roster/display mode/applicable seats/policy, resets cap/queue, samples a new deadline, and avoids the previous category when possible. |
@@ -371,7 +375,7 @@ This local-only app has no telemetry. Use deterministic domain/store tests, acce
 ### Unverified boundaries
 
 1. Twelve-player Radial readability/finger reach and 13+ central-name readability on the smallest supported physical phones are unverified until device testing.
-2. The proposed duration formula, +1.5-second award, 15-second cap, and 600 ms foul hold are reasoned starting values, not playtested balance.
+2. The proposed duration formula, default 0.5–3.0-second enabled range, 0.0–10.0 input bounds, 100 ms granularity, 15-second cap, and 600 ms foul hold are reasoned starting values, not playtested balance.
 3. Final category prompt content, cultural fit, localization, difficulty spread, and safe-answer breadth are not yet curated.
 4. iOS/Android wake-lock, vibration, audio under hardware mute, and installed-PWA behavior remain browser/device dependent.
 5. Drag behavior under rotated labels is unverified; tap-select/tap-seat remains the required accessible fallback for Radial mode. Name-only mode has no drag interaction.

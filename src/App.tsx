@@ -21,7 +21,13 @@ import { categoryBombStore, useCategoryBombStore } from './store/categoryBombSto
 import type { CategoryBombTurnPolicy } from './domain/categoryBomb'
 
 type AppView = 'home' | 'sessions' | 'lobby' | 'packs' | 'charades' | 'charades-packs' | 'category-bomb'
-type CategoryBombDraft = { playerNames: string[]; turnPolicy: CategoryBombTurnPolicy }
+type CategoryBombDraft = {
+  playerNames: string[]
+  turnPolicy: CategoryBombTurnPolicy
+  passTimeBonusEnabled: boolean
+  passTimeBonusMinSeconds: number
+  passTimeBonusMaxSeconds: number
+}
 
 function AppContent() {
   const [view, setView] = useState<AppView>('home')
@@ -47,7 +53,13 @@ function AppContent() {
     onExit={() => { categoryBombStore.getState().reset(); appStore.getState().setActiveGame(null); setCategoryBombDraft(null); setView('home') }}
     onSetup={() => {
       const round = categoryBombStore.getState().round
-      if (round) setCategoryBombDraft({ playerNames: round.settings.players.map((player) => player.name), turnPolicy: round.settings.turnPolicy })
+      if (round) setCategoryBombDraft({
+        playerNames: round.settings.players.map((player) => player.name),
+        turnPolicy: round.settings.turnPolicy,
+        passTimeBonusEnabled: round.settings.passTimeBonusEnabled,
+        passTimeBonusMinSeconds: round.settings.passTimeBonusMinMs / 1_000,
+        passTimeBonusMaxSeconds: round.settings.passTimeBonusMaxMs / 1_000,
+      })
       categoryBombStore.getState().reset()
       appStore.getState().setActiveGame(null)
       setView('category-bomb')
@@ -84,6 +96,9 @@ function AppContent() {
   if (view === 'category-bomb') return <CategoryBombSetupScreen
     initialPlayerNames={categoryBombDraft?.playerNames}
     initialTurnPolicy={categoryBombDraft?.turnPolicy}
+    initialPassTimeBonusEnabled={categoryBombDraft?.passTimeBonusEnabled}
+    initialPassTimeBonusMinSeconds={categoryBombDraft?.passTimeBonusMinSeconds}
+    initialPassTimeBonusMaxSeconds={categoryBombDraft?.passTimeBonusMaxSeconds}
     onBack={() => { appStore.getState().setActiveGame(null); setCategoryBombDraft(null); setView('home') }}
   />
 

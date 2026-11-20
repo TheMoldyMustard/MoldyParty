@@ -12,13 +12,26 @@ import {
   syncCategoryBombClock,
   validateCategoryBombSettings,
   type CategoryBombRound,
+  type CategoryBombSettings,
   type CategoryBombTurnPolicy,
 } from '../domain/categoryBomb'
 import { categoryBombPrompts, type CategoryBombPrompt } from '../domain/categoryBombCategories'
 
+export interface CategoryBombPassTimeBonusDraft {
+  enabled: boolean
+  minMs: number
+  maxMs: number
+}
+
+export const DEFAULT_CATEGORY_BOMB_PASS_TIME_BONUS: CategoryBombPassTimeBonusDraft = {
+  enabled: false,
+  minMs: 500,
+  maxMs: 3_000,
+}
+
 export interface CategoryBombStoreState {
   round: CategoryBombRound | null
-  startSetup: (playerNames: string[], turnPolicy: CategoryBombTurnPolicy) => void
+  startSetup: (playerNames: string[], turnPolicy: CategoryBombTurnPolicy, passTimeBonus?: CategoryBombPassTimeBonusDraft) => void
   swapSeats: (firstPlayerId: string, secondPlayerId: string) => void
   arm: (now?: number) => void
   acceptAnswer: (actionToken: number, now?: number) => void
@@ -48,8 +61,11 @@ function isRecoverableRound(value: unknown): value is CategoryBombRound {
   if (players.length !== value.settings.players.length) return false
   const settings = {
     turnPolicy: value.settings.turnPolicy,
+    passTimeBonusEnabled: value.settings.passTimeBonusEnabled,
+    passTimeBonusMinMs: value.settings.passTimeBonusMinMs,
+    passTimeBonusMaxMs: value.settings.passTimeBonusMaxMs,
     players,
-  } as CategoryBombRound['settings']
+  } as CategoryBombSettings
   if (validateCategoryBombSettings(settings).length > 0) return false
   const displayMode = deriveCategoryBombDisplayMode(players.length)
   if (value.displayMode !== displayMode) return false
@@ -61,6 +77,8 @@ function isRecoverableRound(value: unknown): value is CategoryBombRound {
   if (typeof value.id !== 'string' || !value.id || typeof value.categoryId !== 'string' || !value.categoryId || typeof value.categoryLabel !== 'string' || !value.categoryLabel) return false
   if (!Array.isArray(value.remainingCyclePlayerIds) || !Number.isInteger(value.actionToken) || Number(value.actionToken) < 0) return false
   if (!Number.isFinite(value.extensionGrantedMs) || Number(value.extensionGrantedMs) < 0 || Number(value.extensionGrantedMs) > 15_000) return false
+  if (!Number.isFinite(value.lastAppliedPassBonusMs) || Number(value.lastAppliedPassBonusMs) < 0 || Number(value.lastAppliedPassBonusMs) > 10_000 || !Number.isInteger(Number(value.lastAppliedPassBonusMs) / 100)) return false
+  if (Number(value.lastAppliedPassBonusMs) > Number(value.extensionGrantedMs)) return false
   const playerIds = new Set(players.map((player) => player.id))
   const queue = value.remainingCyclePlayerIds
   if (queue.some((id) => typeof id !== 'string' || !playerIds.has(id)) || new Set(queue).size !== queue.length) return false
@@ -100,9 +118,12 @@ export function createCategoryBombStore(
 ) {
   return createStore<CategoryBombStoreState>()(persist((set, get) => ({
     round: null,
-    startSetup: (playerNames, turnPolicy) => set({
+    startSetup: (playerNames, turnPolicy, passTimeBonus = DEFAULT_CATEGORY_BOMB_PASS_TIME_BONUS) => set({
       round: createCategoryBombRound({
         turnPolicy,
+        passTimeBonusEnabled: passTimeBonus.enabled,
+        passTimeBonusMinMs: passTimeBonus.minMs,
+        passTimeBonusMaxMs: passTimeBonus.maxMs,
         players: playerNames.map((name, index) => ({ id: `category-player-${index + 1}`, name, seat: null })),
       }, prompts, random),
     }),
@@ -135,6 +156,7 @@ export function createCategoryBombStore(
         remainingCyclePlayerIds: [],
         deadlineMs: null,
         extensionGrantedMs: 0,
+        lastAppliedPassBonusMs: 0,
         actionToken: state.round.actionToken + 1,
         explodedPlayerId: null,
         explosionReason: null,
@@ -151,7 +173,9 @@ export function createCategoryBombStore(
     storage: jsonStorage(storage),
     partialize: (state) => ({ round: state.round }),
     merge: (persisted, current) => {
-      const saved = isRecord(persisted) && isRecoverableRound(persisted.round) ? persisted.round : null
+      const saved = isRecord(persisted) && isRecoverableRound(persisted.round)
+        ? { ...persisted.round, lastAppliedPassBonusMs: 0 }
+        : null
       return { ...current, round: saved }
     },
     onRehydrateStorage: () => (state) => state?.recover(clock()),

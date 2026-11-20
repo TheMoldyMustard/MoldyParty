@@ -10,7 +10,7 @@ interface CategoryBombActiveScreenProps {
 }
 
 export default function CategoryBombActiveScreen({ round, devices, onExit }: CategoryBombActiveScreenProps) {
-  const [awardVisible, setAwardVisible] = useState(false)
+  const [awardMs, setAwardMs] = useState(0)
   const [holdingFoul, setHoldingFoul] = useState(false)
   const awardTimer = useRef<number | null>(null)
   const foulTimer = useRef<number | null>(null)
@@ -46,10 +46,10 @@ export default function CategoryBombActiveScreen({ round, devices, onExit }: Cat
     const after = categoryBombStore.getState().round
     if (!after || after.actionToken === before.actionToken) return
     devices.playAccept()
-    if (after.extensionGrantedMs > before.extensionGrantedMs) {
-      setAwardVisible(true)
+    if (after.lastAppliedPassBonusMs > 0) {
+      setAwardMs(after.lastAppliedPassBonusMs)
       if (awardTimer.current !== null) window.clearTimeout(awardTimer.current)
-      awardTimer.current = window.setTimeout(() => setAwardVisible(false), 300)
+      awardTimer.current = window.setTimeout(() => setAwardMs(0), 300)
     }
   }, [devices, round.actionToken])
 
@@ -115,6 +115,6 @@ export default function CategoryBombActiveScreen({ round, devices, onExit }: Cat
       onKeyUp={(event) => { if (event.key === ' ' || event.key === 'Enter') cancelFoul() }}
       onBlur={cancelFoul}
     >{holdingFoul ? 'Keep holding…' : 'Hold: invalid or repeated'}</button>
-    {awardVisible && <div className="category-bomb-award" role="status">+1.5s</div>}
+    {awardMs > 0 && <div className="category-bomb-award" role="status">+{awardMs / 1_000}s</div>}
   </main>
 }

@@ -51,6 +51,56 @@ describe('Category Bomb setup and pre-round screens', () => {
     expect(categoryBombStore.getState().round).toBeNull()
   })
 
+  it('keeps random pass time off by default and stores an enabled range', async () => {
+    const user = userEvent.setup()
+    render(<CategoryBombSetupScreen onBack={() => undefined} initialPlayerNames={names(3)} />)
+    const toggle = screen.getByRole('checkbox', { name: /Add random time on pass/i })
+    const minimum = screen.getByLabelText('Minimum seconds')
+    const maximum = screen.getByLabelText('Maximum seconds')
+    expect(toggle).not.toBeChecked()
+    expect(minimum).toBeDisabled()
+    expect(maximum).toBeDisabled()
+    expect(minimum).toHaveValue(0.5)
+    expect(maximum).toHaveValue(3)
+
+    await user.click(toggle)
+    await user.clear(minimum)
+    await user.type(minimum, '1.2')
+    await user.clear(maximum)
+    await user.type(maximum, '2.4')
+    await user.click(screen.getByRole('button', { name: 'Arrange players' }))
+    expect(categoryBombStore.getState().round?.settings).toMatchObject({
+      passTimeBonusEnabled: true,
+      passTimeBonusMinMs: 1_200,
+      passTimeBonusMaxMs: 2_400,
+    })
+  })
+
+  it('blocks a reversed enabled pass-time range with an actionable error', async () => {
+    const user = userEvent.setup()
+    render(<CategoryBombSetupScreen onBack={() => undefined} initialPlayerNames={names(3)} />)
+    await user.click(screen.getByRole('checkbox', { name: /Add random time on pass/i }))
+    const minimum = screen.getByLabelText('Minimum seconds')
+    const maximum = screen.getByLabelText('Maximum seconds')
+    await user.clear(minimum)
+    await user.type(minimum, '3')
+    await user.clear(maximum)
+    await user.type(maximum, '0.5')
+    await user.click(screen.getByRole('button', { name: 'Arrange players' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Minimum pass-time bonus cannot exceed maximum.')
+    expect(categoryBombStore.getState().round).toBeNull()
+  })
+
+  it('blocks an empty enabled pass-time value instead of treating it as zero', async () => {
+    const user = userEvent.setup()
+    render(<CategoryBombSetupScreen onBack={() => undefined} initialPlayerNames={names(3)} />)
+    await user.click(screen.getByRole('checkbox', { name: /Add random time on pass/i }))
+    await user.clear(screen.getByLabelText('Minimum seconds'))
+    await user.click(screen.getByRole('button', { name: 'Arrange players' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Pass-time bonus must be a finite number.')
+    expect(categoryBombStore.getState().round).toBeNull()
+  })
+
   it('swaps radial names and arms from the placement screen', async () => {
     categoryBombStore.getState().startSetup(names(4), 'fair-cycle')
     const before = categoryBombStore.getState().round!

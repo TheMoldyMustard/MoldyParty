@@ -11,8 +11,8 @@ function names(count: number): string[] {
   return Array.from({ length: count }, (_, index) => `Player ${index + 1}`)
 }
 
-function start(count: number) {
-  categoryBombStore.getState().startSetup(names(count), 'fair-cycle')
+function start(count: number, bonus?: { enabled: boolean; minMs: number; maxMs: number }) {
+  categoryBombStore.getState().startSetup(names(count), 'fair-cycle', bonus)
   categoryBombStore.getState().arm(Date.now())
 }
 
@@ -34,8 +34,9 @@ describe('Category Bomb flow', () => {
     expect(screen.getByRole('heading', { name: 'Who’s playing?' })).toBeInTheDocument()
   })
 
-  it('renders radial players and passes with a fixed award without exposing the timer', async () => {
+  it('renders radial players and passes without an award when the bonus is disabled', async () => {
     start(4)
+    const deadline = categoryBombStore.getState().round!.deadlineMs
     const firstName = categoryBombStore.getState().round!.settings.players.find((player) => player.id === categoryBombStore.getState().round!.currentPlayerId)!.name
     const user = userEvent.setup()
     render(<CategoryBombGame onExit={() => undefined} onSetup={() => undefined} />)
@@ -45,8 +46,28 @@ describe('Category Bomb flow', () => {
     expect(screen.queryByRole('timer')).not.toBeInTheDocument()
     expect(document.body).not.toHaveTextContent(String(categoryBombStore.getState().round!.deadlineMs))
     await user.click(screen.getByRole('button', { name: new RegExp(`Accept ${firstName}`) }))
-    expect(screen.getByText('+1.5s')).toBeInTheDocument()
+    expect(screen.queryByText(/^\+/)).not.toBeInTheDocument()
+    expect(categoryBombStore.getState().round?.deadlineMs).toBe(deadline)
     expect(screen.getByText(/'s turn$/)).not.toHaveTextContent(firstName)
+  })
+
+  it('shows the actual sampled bonus and the capped applied amount', async () => {
+    const user = userEvent.setup()
+    start(4, { enabled: true, minMs: 1_700, maxMs: 1_700 })
+    const initialDeadline = categoryBombStore.getState().round!.deadlineMs!
+    const { unmount } = render(<CategoryBombGame onExit={() => undefined} onSetup={() => undefined} />)
+    await user.click(screen.getByRole('button', { name: /accept .* answer and pass/i }))
+    expect(screen.getByText('+1.7s')).toBeInTheDocument()
+    expect(categoryBombStore.getState().round?.deadlineMs).toBe(initialDeadline + 1_700)
+    unmount()
+
+    start(4, { enabled: true, minMs: 500, maxMs: 500 })
+    categoryBombStore.setState((state) => ({
+      round: state.round ? { ...state.round, extensionGrantedMs: 14_800 } : null,
+    }))
+    render(<CategoryBombGame onExit={() => undefined} onSetup={() => undefined} />)
+    await user.click(screen.getByRole('button', { name: /accept .* answer and pass/i }))
+    expect(screen.getByText('+0.2s')).toBeInTheDocument()
   })
 
   it('accepts only once when the bomb is double-clicked', async () => {
@@ -147,7 +168,11 @@ describe('Category Bomb flow', () => {
   })
 
   it('keeps the roster and turn policy when returning from placement to setup', async () => {
-    categoryBombStore.getState().startSetup(['Alex', 'Blair', 'Casey', 'Devon'], 'chaos')
+    categoryBombStore.getState().startSetup(['Alex', 'Blair', 'Casey', 'Devon'], 'chaos', {
+      enabled: true,
+      minMs: 1_200,
+      maxMs: 2_400,
+    })
     appStore.setState({ activeGameId: 'category-bomb' })
     const user = userEvent.setup()
     render(<App />)
@@ -155,6 +180,9 @@ describe('Category Bomb flow', () => {
     expect(screen.getByLabelText('Player 1 name')).toHaveValue('Alex')
     expect(screen.getAllByRole('textbox')).toHaveLength(4)
     expect(screen.getByRole('radio', { name: /^Chaos/ })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /Add random time on pass/i })).toBeChecked()
+    expect(screen.getByLabelText('Minimum seconds')).toHaveValue(1.2)
+    expect(screen.getByLabelText('Maximum seconds')).toHaveValue(2.4)
   })
 
   it('keeps a large roster when returning from ready to setup', async () => {

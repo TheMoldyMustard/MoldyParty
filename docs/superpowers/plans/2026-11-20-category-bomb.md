@@ -17,7 +17,7 @@
 - Radial mode uses twelve fixed seats, optional swapping, perimeter labels, and a derived arrow.
 - Name-only mode has no seats, placement, perimeter roster, arrow element, or arrow semantics; it prominently displays the current name.
 - Default Fair cycle visits every player once before reshuffling; Chaos may revisit prior players but never selects the current player.
-- Secret duration is uniformly sampled from `20 + 3n` through `30 + 5n` seconds; answers add 1.5 seconds up to 15 seconds total.
+- Secret duration is uniformly sampled from `20 + 3n` through `30 + 5n` seconds; optional random pass-time bonuses default off, use an inclusive 0.5–3.0-second range when enabled, and remain capped at 15 seconds total.
 - Deadline expiry wins every late-answer/foul race; no remaining time/progress/countdown is visible or announced.
 - Invalid/repeated answers use a cancelable 600 ms hold-to-foul action; no microphone or automatic validation.
 - No new runtime dependency, backend, analytics, audio asset, custom pack schema, push, or merge.
@@ -46,7 +46,7 @@
 - Produces: `AppGameId`, `PackGameId`, `CategoryBombSettings`, `CategoryBombRound`, `validateCategoryBombSettings`, `deriveCategoryBombDisplayMode`, `createCategoryBombRound`, `acceptCategoryBombAnswer`, `callCategoryBombFoul`, `syncCategoryBombClock`, `replayCategoryBombRound`, `swapCategoryBombSeats`.
 - Consumes: no new interfaces.
 
-- [ ] **Step 1: Write failing identity/domain tests** covering pack-ID narrowing; name/count validation including 50 players; 12/13 display threshold; seat assignment/swap; duration boundaries; Fair/Chaos selection; answer extension/cap; stale token; exact-deadline precedence; foul; replay category avoidance.
+- [ ] **Step 1: Write failing identity/domain tests** covering pack-ID narrowing; name/count and pass-bonus validation; 12/13 display threshold; seat assignment/swap; duration boundaries; Fair/Chaos selection; disabled and random answer extension/cap; stale token; exact-deadline precedence; foul; replay category avoidance.
 - [ ] **Step 2: Run `npm run test:run -- src/domain/categoryBomb.test.ts src/domain/packCompatibility.test.ts`** and confirm failure because the new contracts/modules do not exist.
 - [ ] **Step 3: Implement the minimal domain and typed category list** with injected clock/random inputs and linear-time normalized-name validation.
 - [ ] **Step 4: Run the focused tests, then `npm run test:run -- --reporter=dot`** and confirm all pass.
@@ -110,7 +110,7 @@
 
 - [ ] **Step 1: Write failing flow/app/audio tests** for the third home card, refresh routing, Radial arrow/name status, Name-only central name with no arrow/roster DOM, answer feedback, hidden timer DOM, exact explosion result, replay, exit isolation, audio failure fallback, and cancelable pointer/keyboard foul hold.
 - [ ] **Step 2: Run the focused test files** and confirm failures are caused by missing active-flow behavior.
-- [ ] **Step 3: Implement the game phase switch and active/result screens** with 200 ms clock sync, focus/page-show/visibility reconciliation, action tokens, accessible live status, fixed `+1.5s` flash, and cleanup.
+- [ ] **Step 3: Implement the game phase switch and active/result screens** with 200 ms clock sync, focus/page-show/visibility reconciliation, action tokens, accessible live status, conditional actual-bonus flash, and cleanup.
 - [ ] **Step 4: Implement the Category Bomb device controller** using synthesized accepted/explosion cues, optional vibration, and advisory wake lock; failures remain non-blocking.
 - [ ] **Step 5: Integrate `AppGameId`, `App.tsx`, home card, persisted recovery, and CSS** without changing existing game behavior.
 - [ ] **Step 6: Run focused tests and the full suite** and confirm all pass.

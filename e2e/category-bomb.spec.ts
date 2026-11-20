@@ -34,6 +34,9 @@ async function expectBoxesNotToOverlap(page: Page, selector: string) {
 
 test('radial game hides the timer, explodes on expiry, and replays', async ({ page }) => {
   await openCategoryBomb(page, ['Alex', 'Blair', 'Casey', 'Devon'])
+  await expect(page.getByRole('checkbox', { name: /Add random time on pass/ })).not.toBeChecked()
+  await expect(page.getByLabel('Minimum seconds')).toBeDisabled()
+  await expect(page.getByLabel('Maximum seconds')).toBeDisabled()
   await page.getByRole('button', { name: 'Arrange players' }).click()
   await expect(page.getByTestId('category-bomb-placement-arrow')).toBeVisible()
   await expect(page.getByTestId('category-bomb-seat')).toHaveCount(4)
@@ -45,13 +48,25 @@ test('radial game hides the timer, explodes on expiry, and replays', async ({ pa
   await expect(page.locator('body')).not.toContainText(/\b\d{1,2}:\d{2}\b/)
 
   await page.getByRole('button', { name: /Accept .* answer and pass/ }).click()
-  await expect(page.getByText('+1.5s')).toBeVisible()
+  await expect(page.getByText(/^\+/)).toHaveCount(0)
   await page.clock.fastForward(120_000)
   await expect(page.getByRole('heading', { name: /got exploded!/ })).toBeVisible()
 
   await page.getByRole('button', { name: 'New bomb' }).click()
   await expect(page.getByTestId('category-bomb-arrow')).toBeVisible()
   await expect(page.getByRole('timer')).toHaveCount(0)
+})
+
+test('enabled pass-time bonus accepts a range and shows the actual random award', async ({ page }) => {
+  await openCategoryBomb(page, ['Alex', 'Blair', 'Casey'])
+  await page.getByRole('checkbox', { name: /Add random time on pass/ }).check()
+  await page.getByLabel('Minimum seconds').fill('1.7')
+  await page.getByLabel('Maximum seconds').fill('1.7')
+  await page.getByRole('button', { name: 'Arrange players' }).click()
+  await page.clock.install()
+  await page.getByRole('button', { name: 'Arm bomb' }).click()
+  await page.getByRole('button', { name: /Accept .* answer and pass/ }).click()
+  await expect(page.getByText('+1.7s')).toBeVisible()
 })
 
 test('13-player game shows only the current name and no arrow board', async ({ page }) => {

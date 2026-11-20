@@ -37,7 +37,7 @@ Install Playwright's browser once on a new machine with `npx playwright install 
 
 1. Add at least two uniquely named players and choose **Fair cycle** or **Chaos**. Fair cycle gives everyone one turn before reshuffling; Chaos may choose any player except the person who just answered.
 2. With 2–12 players, place the phone in the center and arrange the names around it. The center arrow points toward the current player. With 13 or more players, the game switches to a large-name view with no seating board or arrow, so the phone can be passed directly.
-3. Read the category, say a valid item, then tap the bomb and pass the phone to the next named player. Each accepted answer adds a brief fixed 1.5-second allowance. The random fuse length scales with the group size and is never displayed.
+3. Read the category, say a valid item, then tap the bomb and pass the phone to the next named player. **Add random time on pass** is off by default; when enabled, choose a 0.0–10.0-second minimum and maximum in 0.1-second steps (initially 0.5–3.0 seconds). Each accepted pass samples within that range, while a 15-second total cap keeps the round bounded. The random fuse length scales with the group size and is never displayed.
 4. The group self-moderates repetition and invalid answers: hold the foul control for 600 ms to explode the current player. A normal expiry also reveals the player holding the turn when the fuse ends.
 5. Select **New bomb** to keep the roster and rules while drawing a new category, or return to placement/rules before the next round.
 

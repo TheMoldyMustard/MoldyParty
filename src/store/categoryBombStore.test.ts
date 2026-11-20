@@ -30,6 +30,27 @@ describe('Category Bomb store', () => {
     expect(store.getState().round).toBeNull()
   })
 
+  it('defaults the pass-time bonus off and retains an explicitly enabled range', () => {
+    const store = createCategoryBombStore('category-bomb-bonus-settings', () => 0, localStorage, () => 1_000)
+    store.getState().startSetup(names(3), 'fair-cycle')
+    expect(store.getState().round?.settings).toMatchObject({
+      passTimeBonusEnabled: false,
+      passTimeBonusMinMs: 500,
+      passTimeBonusMaxMs: 3_000,
+    })
+
+    store.getState().startSetup(names(3), 'chaos', {
+      enabled: true,
+      minMs: 1_200,
+      maxMs: 2_400,
+    })
+    expect(store.getState().round?.settings).toMatchObject({
+      passTimeBonusEnabled: true,
+      passTimeBonusMinMs: 1_200,
+      passTimeBonusMaxMs: 2_400,
+    })
+  })
+
   it('uses ready mode and null seats for thirteen or more players', () => {
     const store = createCategoryBombStore('category-bomb-large', () => 0, localStorage, () => 1_000)
     store.getState().startSetup(names(13), 'chaos')
@@ -64,6 +85,31 @@ describe('Category Bomb store', () => {
     await restored.persist.rehydrate()
     expect(restored.getState().round).toBeNull()
     expect(localStorage.getItem('unrelated')).toBe('keep')
+  })
+
+  it('drops a persisted round with an invalid retained pass-time bonus range', async () => {
+    const source = createCategoryBombStore('category-bomb-invalid-bonus', () => 0, localStorage, () => 1_000)
+    source.getState().startSetup(names(3), 'fair-cycle')
+    const saved = JSON.parse(localStorage.getItem('category-bomb-invalid-bonus')!)
+    saved.state.round.settings.passTimeBonusMinMs = 3_000
+    saved.state.round.settings.passTimeBonusMaxMs = 500
+    localStorage.setItem('category-bomb-invalid-bonus', JSON.stringify(saved))
+
+    const restored = createCategoryBombStore('category-bomb-invalid-bonus', () => 0, localStorage, () => 1_000)
+    await restored.persist.rehydrate()
+    expect(restored.getState().round).toBeNull()
+  })
+
+  it('clears the prior pass bonus feedback when hydrating an active round', async () => {
+    const source = createCategoryBombStore('category-bomb-feedback-reset', () => 0, localStorage, () => 1_000)
+    source.getState().startSetup(names(3), 'fair-cycle', { enabled: true, minMs: 500, maxMs: 500 })
+    source.getState().arm(1_000)
+    source.getState().acceptAnswer(source.getState().round!.actionToken, 1_100)
+    expect(source.getState().round?.lastAppliedPassBonusMs).toBe(500)
+
+    const restored = createCategoryBombStore('category-bomb-feedback-reset', () => 0, localStorage, () => 1_200)
+    await restored.persist.rehydrate()
+    expect(restored.getState().round?.lastAppliedPassBonusMs).toBe(0)
   })
 
   it('drops an active snapshot whose fair-cycle queue contains an unknown player', async () => {

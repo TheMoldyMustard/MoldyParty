@@ -19,6 +19,9 @@ export interface CategoryBombPlayer {
 export interface CategoryBombSettings {
   players: CategoryBombPlayer[]
   turnPolicy: CategoryBombTurnPolicy
+  passTimeBonusEnabled: boolean
+  passTimeBonusMinMs: number
+  passTimeBonusMaxMs: number
 }
 
 export interface CategoryBombRound {
@@ -32,6 +35,7 @@ export interface CategoryBombRound {
   remainingCyclePlayerIds: string[]
   deadlineMs: number | null
   extensionGrantedMs: number
+  lastAppliedPassBonusMs: number
   actionToken: number
   explodedPlayerId: string | null
   explosionReason: CategoryBombExplosionReason | null
@@ -88,6 +92,9 @@ function normalizeSettings(settings: CategoryBombSettings): CategoryBombSettings
   const indexes = displayMode === 'radial' ? radialSeatIndexes(settings.players.length) : []
   return {
     turnPolicy: settings.turnPolicy,
+    passTimeBonusEnabled: settings.passTimeBonusEnabled,
+    passTimeBonusMinMs: settings.passTimeBonusMinMs,
+    passTimeBonusMaxMs: settings.passTimeBonusMaxMs,
     players: settings.players.map((player, index) => ({
       id: player.id,
       name: player.name.trim(),
@@ -129,6 +136,15 @@ export function validateCategoryBombSettings(settings: CategoryBombSettings): st
   const ids = settings.players.map((player) => player.id)
   if (ids.some((id) => !id) || new Set(ids).size !== ids.length) errors.push('Every player needs a unique id.')
   if (!['fair-cycle', 'chaos'].includes(settings.turnPolicy)) errors.push('Choose a valid turn mode.')
+  if (typeof settings.passTimeBonusEnabled !== 'boolean') errors.push('Choose whether to add random time on pass.')
+  const bonusValues = [settings.passTimeBonusMinMs, settings.passTimeBonusMaxMs]
+  if (bonusValues.some((value) => !Number.isFinite(value))) {
+    errors.push('Pass-time bonus must be a finite number.')
+  } else {
+    if (bonusValues.some((value) => value < 0 || value > 10_000)) errors.push('Pass-time bonus must stay between 0 and 10 seconds.')
+    if (bonusValues.some((value) => !Number.isInteger(value / 100))) errors.push('Pass-time bonus must use 0.1-second increments.')
+    if (settings.passTimeBonusMinMs > settings.passTimeBonusMaxMs) errors.push('Minimum pass-time bonus cannot exceed maximum.')
+  }
   return errors
 }
 
@@ -136,6 +152,13 @@ export function sampleCategoryBombDurationMs(playerCount: number, random: () => 
   const minimum = 20 + 3 * playerCount
   const maximum = 30 + 5 * playerCount
   return (minimum + Math.floor(clampRandom(random()) * (maximum - minimum + 1))) * 1_000
+}
+
+export function sampleCategoryBombPassBonusMs(settings: CategoryBombSettings, random: () => number = Math.random): number {
+  if (!settings.passTimeBonusEnabled) return 0
+  const minimumUnits = settings.passTimeBonusMinMs / 100
+  const maximumUnits = settings.passTimeBonusMaxMs / 100
+  return (minimumUnits + Math.floor(clampRandom(random()) * (maximumUnits - minimumUnits + 1))) * 100
 }
 
 export function createCategoryBombRound(
@@ -159,6 +182,7 @@ export function createCategoryBombRound(
     remainingCyclePlayerIds: [],
     deadlineMs: null,
     extensionGrantedMs: 0,
+    lastAppliedPassBonusMs: 0,
     actionToken: 0,
     explodedPlayerId: null,
     explosionReason: null,
@@ -191,6 +215,7 @@ export function armCategoryBombRound(round: CategoryBombRound, random: () => num
     remainingCyclePlayerIds: round.settings.turnPolicy === 'fair-cycle' ? queue.slice(1) : [],
     deadlineMs: now + sampleCategoryBombDurationMs(round.settings.players.length, random),
     extensionGrantedMs: 0,
+    lastAppliedPassBonusMs: 0,
     actionToken: round.actionToken + 1,
     explodedPlayerId: null,
     explosionReason: null,
@@ -217,13 +242,15 @@ export function acceptCategoryBombAnswer(
 ): CategoryBombRound {
   const current = syncCategoryBombClock(round, now)
   if (current !== round || round.phase !== 'ACTIVE' || round.deadlineMs === null || actionToken !== round.actionToken) return current
-  const extension = Math.min(1_500, 15_000 - round.extensionGrantedMs)
+  const sampledBonus = sampleCategoryBombPassBonusMs(round.settings, random)
+  const extension = Math.min(sampledBonus, Math.max(0, 15_000 - round.extensionGrantedMs))
   const next = nextPlayer(round, random)
   return {
     ...round,
     ...next,
     deadlineMs: round.deadlineMs + extension,
     extensionGrantedMs: round.extensionGrantedMs + extension,
+    lastAppliedPassBonusMs: extension,
     actionToken: round.actionToken + 1,
   }
 }
@@ -257,6 +284,7 @@ export function replayCategoryBombRound(
     remainingCyclePlayerIds: [],
     deadlineMs: null,
     extensionGrantedMs: 0,
+    lastAppliedPassBonusMs: 0,
     actionToken: 0,
     explodedPlayerId: null,
     explosionReason: null,

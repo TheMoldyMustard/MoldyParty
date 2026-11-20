@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   acceptCategoryBombAnswer,
   armCategoryBombRound,
@@ -22,7 +22,13 @@ function players(count: number): CategoryBombPlayer[] {
 }
 
 function settings(count = 4, turnPolicy: CategoryBombSettings['turnPolicy'] = 'fair-cycle'): CategoryBombSettings {
-  return { players: players(count), turnPolicy }
+  return {
+    players: players(count),
+    turnPolicy,
+    passTimeBonusEnabled: false,
+    passTimeBonusMinMs: 500,
+    passTimeBonusMaxMs: 3_000,
+  }
 }
 
 function sequenceRandom(values: number[]): () => number {
@@ -41,16 +47,25 @@ describe('Category Bomb validation and display modes', () => {
     expect(validateCategoryBombSettings({ players: [
       { id: 'a', name: ' Alex ', seat: null },
       { id: 'b', name: 'alex', seat: null },
-    ], turnPolicy: 'fair-cycle' })).toContain('Player names must be unique.')
+    ], turnPolicy: 'fair-cycle', passTimeBonusEnabled: false, passTimeBonusMinMs: 500, passTimeBonusMaxMs: 3_000 })).toContain('Player names must be unique.')
     expect(validateCategoryBombSettings({ players: [
       { id: 'a', name: '', seat: null },
       { id: 'b', name: 'Blair', seat: null },
-    ], turnPolicy: 'fair-cycle' })).toContain('Every player needs a name.')
+    ], turnPolicy: 'fair-cycle', passTimeBonusEnabled: false, passTimeBonusMinMs: 500, passTimeBonusMaxMs: 3_000 })).toContain('Every player needs a name.')
     expect(validateCategoryBombSettings({ players: [
       { id: 'a', name: 'A'.repeat(25), seat: null },
       { id: 'b', name: 'Blair', seat: null },
-    ], turnPolicy: 'fair-cycle' })).toContain('Player names must be 24 characters or fewer.')
+    ], turnPolicy: 'fair-cycle', passTimeBonusEnabled: false, passTimeBonusMinMs: 500, passTimeBonusMaxMs: 3_000 })).toContain('Player names must be 24 characters or fewer.')
     expect(validateCategoryBombSettings(settings(50))).toEqual([])
+  })
+
+  it('validates the retained pass-time bonus range even while disabled', () => {
+    expect(validateCategoryBombSettings({ ...settings(), passTimeBonusEnabled: 'yes' as unknown as boolean })).toContain('Choose whether to add random time on pass.')
+    expect(validateCategoryBombSettings({ ...settings(), passTimeBonusMinMs: -100 })).toContain('Pass-time bonus must stay between 0 and 10 seconds.')
+    expect(validateCategoryBombSettings({ ...settings(), passTimeBonusMaxMs: 10_100 })).toContain('Pass-time bonus must stay between 0 and 10 seconds.')
+    expect(validateCategoryBombSettings({ ...settings(), passTimeBonusMinMs: 550 })).toContain('Pass-time bonus must use 0.1-second increments.')
+    expect(validateCategoryBombSettings({ ...settings(), passTimeBonusMinMs: 3_000, passTimeBonusMaxMs: 500 })).toContain('Minimum pass-time bonus cannot exceed maximum.')
+    expect(validateCategoryBombSettings({ ...settings(), passTimeBonusMinMs: Number.NaN })).toContain('Pass-time bonus must be a finite number.')
   })
 
   it('derives radial through twelve players and name-only from thirteen', () => {
@@ -123,17 +138,30 @@ describe('Category Bomb timer and turn policies', () => {
     expect(round.currentPlayerId).not.toBe(second)
   })
 
-  it('adds short leeway up to the cap and rejects stale actions', () => {
+  it('adds no time and consumes no bonus random draw when disabled', () => {
     let round = activeRound(3)
     const originalDeadline = round.deadlineMs!
     const staleToken = round.actionToken
-    round = acceptCategoryBombAnswer(round, staleToken, 1_100, () => 0)
-    expect(round.deadlineMs).toBe(originalDeadline + 1_500)
-    expect(round.extensionGrantedMs).toBe(1_500)
+    const random = vi.fn(() => 0.5)
+    round = acceptCategoryBombAnswer(round, staleToken, 1_100, random)
+    expect(round.deadlineMs).toBe(originalDeadline)
+    expect(round.extensionGrantedMs).toBe(0)
+    expect(round.lastAppliedPassBonusMs).toBe(0)
+    expect(random).not.toHaveBeenCalled()
     expect(acceptCategoryBombAnswer(round, staleToken, 1_200, () => 0)).toBe(round)
-    for (let index = 0; index < 20; index += 1) {
-      round = acceptCategoryBombAnswer(round, round.actionToken, 1_300 + index, () => 0)
-    }
+  })
+
+  it('samples inclusive 0.1-second bonuses and applies only the remaining cap allowance', () => {
+    const enabled = { ...settings(3), passTimeBonusEnabled: true }
+    let round = armCategoryBombRound(createCategoryBombRound(enabled, categoryBombPrompts, () => 0), () => 0, 1_000)
+    const originalDeadline = round.deadlineMs!
+
+    round = acceptCategoryBombAnswer(round, round.actionToken, 1_100, () => 0)
+    expect(round.lastAppliedPassBonusMs).toBe(500)
+    round = acceptCategoryBombAnswer(round, round.actionToken, 1_200, () => 0.999999)
+    expect(round.lastAppliedPassBonusMs).toBe(3_000)
+    for (let index = 0; index < 4; index += 1) round = acceptCategoryBombAnswer(round, round.actionToken, 1_300 + index, () => 0.999999)
+    expect(round.lastAppliedPassBonusMs).toBe(2_500)
     expect(round.extensionGrantedMs).toBe(15_000)
     expect(round.deadlineMs).toBe(originalDeadline + 15_000)
   })
@@ -170,5 +198,11 @@ describe('Category Bomb replay', () => {
     expect(replayed.settings.players.every((player) => player.seat === null)).toBe(true)
     expect(replayed.categoryId).not.toBe(round.categoryId)
     expect(replayed.extensionGrantedMs).toBe(0)
+    expect(replayed.lastAppliedPassBonusMs).toBe(0)
+    expect(replayed.settings).toMatchObject({
+      passTimeBonusEnabled: false,
+      passTimeBonusMinMs: 500,
+      passTimeBonusMaxMs: 3_000,
+    })
   })
 })
