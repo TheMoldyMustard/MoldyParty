@@ -35,10 +35,12 @@ describe('audio synth', () => {
     expect(await synth.unlock()).toBe(true)
     expect(synth.play('correct')).toBe(true)
     expect(synth.play('pass')).toBe(true)
+    expect(synth.play('bomb-accept')).toBe(true)
+    expect(synth.play('explode')).toBe(true)
 
     expect(fake.context.resume).toHaveBeenCalledTimes(1)
     expect(new Set(fake.frequencies).size).toBeGreaterThan(1)
-    expect(fake.starts).toHaveLength(2)
+    expect(fake.starts).toHaveLength(4)
   })
 
   it('ticks once per countdown second and stops immediately when disabled or disposed', async () => {

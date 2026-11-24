@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import App from './App'
 import { gameStore } from './store/gameStore'
+import { categoryBombStore } from './store/categoryBombStore'
+import { appStore } from './store/appStore'
 
 const setup = {
   playerNames: ['Alex', 'Blair', 'Casey'],
@@ -33,6 +35,8 @@ function completePrivateRound() {
 describe('MoldyParty app shell', () => {
   beforeEach(() => {
     localStorage.clear()
+    categoryBombStore.setState({ round: null })
+    appStore.setState({ activeGameId: null, recoveryNotice: '' })
     gameStore.setState({
       setup: null,
       game: null,
@@ -48,6 +52,7 @@ describe('MoldyParty app shell', () => {
 
     expect(screen.getByRole('heading', { name: 'MoldyParty', level: 1 })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Impostor', level: 2 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Category Bomb', level: 2 })).toBeInTheDocument()
     expect(screen.getByText(/find the impostors before they blend in/i)).toBeInTheDocument()
     expect(screen.getByText(/offline party games/i)).toBeInTheDocument()
     expect(screen.queryByText('Pass it. Bluff it. Find them.')).not.toBeInTheDocument()

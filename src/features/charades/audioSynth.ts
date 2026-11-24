@@ -1,4 +1,4 @@
-export type AudioCue = 'correct' | 'pass' | 'yes' | 'no' | 'maybe' | 'foul' | 'tick'
+export type AudioCue = 'correct' | 'pass' | 'yes' | 'no' | 'maybe' | 'foul' | 'tick' | 'bomb-accept' | 'explode'
 
 interface AudioParamLike {
   setValueAtTime(value: number, time: number): void
@@ -44,6 +44,8 @@ const cueConfig: Record<AudioCue, { frequency: number; duration: number; type: s
   maybe: { frequency: 480, duration: 0.13, type: 'triangle' },
   foul: { frequency: 130, duration: 0.22, type: 'square' },
   tick: { frequency: 1_050, duration: 0.04, type: 'sine' },
+  'bomb-accept': { frequency: 620, duration: 0.08, type: 'triangle' },
+  explode: { frequency: 95, duration: 0.42, type: 'sawtooth' },
 }
 
 function defaultContextFactory(): AudioContextLike {

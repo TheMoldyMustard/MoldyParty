@@ -1,12 +1,12 @@
 import { useStore } from 'zustand'
 import { createStore } from 'zustand/vanilla'
 import { persist, type StateStorage } from 'zustand/middleware'
-import type { GameId } from '../domain/types'
+import type { AppGameId } from '../domain/types'
 
 export interface AppStoreState {
-  activeGameId: GameId | null
+  activeGameId: AppGameId | null
   recoveryNotice: string
-  setActiveGame: (gameId: GameId | null) => void
+  setActiveGame: (gameId: AppGameId | null) => void
   setRecoveryNotice: (notice: string) => void
 }
 
@@ -27,20 +27,31 @@ export function createAppStore(storageName = 'moldyparty-app', storage: StateSto
   }), {
     name: storageName,
     storage: jsonStorage(storage),
-    version: 1,
+    version: 2,
+    migrate: (persisted) => persisted,
     partialize: (state) => ({ activeGameId: state.activeGameId }),
+    merge: (persisted, current) => {
+      const saved = persisted && typeof persisted === 'object' ? persisted as Partial<AppStoreState> : {}
+      const activeGameId = ['impostor', 'charades', 'category-bomb'].includes(String(saved.activeGameId))
+        ? saved.activeGameId as AppGameId
+        : null
+      return { ...current, activeGameId, recoveryNotice: '' }
+    },
   }))
 }
 
 export function resolveActiveGame(
-  explicit: GameId | null,
+  explicit: AppGameId | null,
   hasImpostorGame: boolean,
   hasCharadesGame: boolean,
-): GameId | null {
+  hasCategoryBombGame = false,
+): AppGameId | null {
   if (explicit === 'impostor') return hasImpostorGame ? 'impostor' : null
   if (explicit === 'charades') return hasCharadesGame ? 'charades' : null
+  if (explicit === 'category-bomb') return hasCategoryBombGame ? 'category-bomb' : null
   if (hasImpostorGame) return 'impostor'
   if (hasCharadesGame) return 'charades'
+  if (hasCategoryBombGame) return 'category-bomb'
   return null
 }
 
