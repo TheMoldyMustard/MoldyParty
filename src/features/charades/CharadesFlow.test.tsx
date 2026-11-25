@@ -20,11 +20,18 @@ const henyoSettings: CharadesSettings = {
   noRepeatEnabled: false,
 }
 
+async function openNewSession(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /open forehead charades/i }))
+  await user.click(screen.getByRole('button', { name: 'Create new session' }))
+  await user.type(screen.getByLabelText('Session name'), 'Test Crew')
+  await user.click(screen.getByRole('button', { name: 'Set up session' }))
+}
+
 describe('Forehead Charades interface', () => {
   beforeEach(() => {
     localStorage.clear()
     appStore.setState({ activeGameId: null, recoveryNotice: '' })
-    charadesStore.setState({ session: null })
+    charadesStore.setState({ session: null, sessionsById: {}, activeSessionId: null, pendingSessionName: null })
     gameStore.setState({ game: null, setup: null })
   })
 
@@ -36,7 +43,7 @@ describe('Forehead Charades interface', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: /open forehead charades/i }))
+    await openNewSession(user)
     expect(screen.getByRole('heading', { name: 'Forehead Charades' })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /Classic/i })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /Henyo/i })).toBeInTheDocument()
@@ -53,7 +60,7 @@ describe('Forehead Charades interface', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(screen.getByRole('button', { name: /open forehead charades/i }))
+    await openNewSession(user)
     const tiltControls = screen.getByRole('checkbox', { name: /Tilt controls — Work in progress/i })
     expect(tiltControls).toBeDisabled()
     expect(tiltControls).not.toBeChecked()
@@ -68,7 +75,7 @@ describe('Forehead Charades interface', () => {
   it('runs Get Ready before the timer, accepts a correct tap, and shows the recap', async () => {
     const user = userEvent.setup()
     render(<App />)
-    await user.click(screen.getByRole('button', { name: /open forehead charades/i }))
+    await openNewSession(user)
     await user.click(screen.getByRole('checkbox', { name: /Tilt controls/i }))
     await user.click(screen.getByRole('button', { name: 'Start game' }))
 
@@ -88,6 +95,8 @@ describe('Forehead Charades interface', () => {
     expect(screen.getByRole('heading', { name: 'Round recap' })).toBeInTheDocument()
     expect(screen.getByText(firstWord!)).toBeInTheDocument()
     expect(screen.getByText('1 point')).toBeInTheDocument()
+    expect(screen.getByLabelText('Completed turn stats')).toHaveTextContent('1 correct')
+    expect(screen.getByLabelText('Completed turn stats')).toHaveTextContent('0 passes')
   })
 
   it('keeps Henyo answer buttons separate from scoring and applies a five-second foul', async () => {
@@ -113,15 +122,42 @@ describe('Forehead Charades interface', () => {
     ])
   })
 
+  it('confirms aborting an unfinished turn and keeps the saved session', async () => {
+    charadesStore.getState().createSession('Guess Crew')
+    charadesStore.getState().startSession({
+      ...henyoSettings,
+      players: [{ id: 'p1', name: 'Alex' }, { id: 'p2', name: 'Blair' }],
+    }, [
+      { word: 'Adobo', category: 'food' },
+      { word: 'Balut', category: 'food' },
+    ])
+    appStore.setState({ activeGameId: 'charades' })
+    const sessionId = charadesStore.getState().activeSessionId!
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Abort game' }))
+    expect(screen.getByRole('dialog', { name: 'Abort this game?' })).toBeInTheDocument()
+    await user.click(screen.getByRole('dialog').querySelector('.button--danger') as HTMLButtonElement)
+
+    expect(charadesStore.getState().session).toBeNull()
+    expect(charadesStore.getState().sessionsById[sessionId]).toBeDefined()
+    expect(screen.getByRole('heading', { name: 'Forehead Charades sessions' })).toBeInTheDocument()
+  })
+
   it('collects two relay rosters and names the first rotating holder', async () => {
     const user = userEvent.setup()
     render(<App />)
-    await user.click(screen.getByRole('button', { name: /open forehead charades/i }))
+    await openNewSession(user)
     await user.click(screen.getByRole('radio', { name: /Team Relay/i }))
     await user.clear(screen.getByLabelText('Team 1 name')); await user.type(screen.getByLabelText('Team 1 name'), 'Molds')
-    await user.type(screen.getByLabelText('Team 1 members'), 'Alex, Blair')
+    await user.clear(screen.getByLabelText('Player 1 name')); await user.type(screen.getByLabelText('Player 1 name'), 'Alex')
+    await user.clear(screen.getByLabelText('Player 2 name')); await user.type(screen.getByLabelText('Player 2 name'), 'Blair')
+    await user.click(screen.getByRole('button', { name: 'Add player' }))
+    await user.clear(screen.getByLabelText('Player 3 name')); await user.type(screen.getByLabelText('Player 3 name'), 'Casey')
+    await user.click(screen.getByRole('button', { name: 'Add player' }))
+    await user.clear(screen.getByLabelText('Player 4 name')); await user.type(screen.getByLabelText('Player 4 name'), 'Devon')
     await user.clear(screen.getByLabelText('Team 2 name')); await user.type(screen.getByLabelText('Team 2 name'), 'Spores')
-    await user.type(screen.getByLabelText('Team 2 members'), 'Casey, Devon')
     await user.selectOptions(screen.getByLabelText('Relay rounds'), '3')
     await user.click(screen.getByRole('button', { name: 'Start game' }))
 

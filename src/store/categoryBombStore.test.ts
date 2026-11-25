@@ -8,6 +8,23 @@ function names(count: number): string[] {
 describe('Category Bomb store', () => {
   beforeEach(() => localStorage.clear())
 
+  it('creates a named session and commits an exploded bomb exactly once', () => {
+    const store = createCategoryBombStore('category-bomb-sessions', () => 0, localStorage, () => 1_000, undefined, () => 'session-1')
+    store.getState().createSession('Friday Crew')
+    store.getState().startSetup(['Alex', 'Blair', 'Casey'], 'fair-cycle')
+    store.getState().arm(1_000)
+    const firstHolder = store.getState().round!.currentPlayerId!
+    store.getState().acceptAnswer(store.getState().round!.actionToken, 1_100)
+    const exploded = store.getState().round!.currentPlayerId!
+    store.getState().callFoul(store.getState().round!.actionToken, 1_200)
+    store.getState().syncClock(2_000)
+
+    const session = store.getState().sessionsById['session-1']
+    expect(session.completedBombs).toBe(1)
+    expect(session.statsByPlayerId[firstHolder].successfulAnswers).toBe(1)
+    expect(session.statsByPlayerId[exploded].foulExplosions).toBe(1)
+  })
+
   it('routes setup, seat swaps, arm, answer, foul, replay, and reset through the domain', () => {
     const store = createCategoryBombStore('category-bomb-commands', () => 0, localStorage, () => 1_000)
     store.getState().startSetup(names(4), 'fair-cycle')
@@ -100,6 +117,58 @@ describe('Category Bomb store', () => {
     expect(restored.getState().round).toBeNull()
   })
 
+  it('drops one saved session with invalid setup without deleting valid sessions', async () => {
+    const ids = ['valid-session', 'broken-session']
+    const source = createCategoryBombStore('category-bomb-session-validation', () => 0, localStorage, () => 1_000, undefined, () => ids.shift()!)
+    source.getState().createSession('Valid')
+    source.getState().startSetup(['Alex', 'Blair'], 'fair-cycle')
+    source.getState().createSession('Broken')
+    source.getState().startSetup(['Casey', 'Devon'], 'chaos')
+    const saved = JSON.parse(localStorage.getItem('category-bomb-session-validation')!)
+    saved.state.sessionsById['broken-session'].setup.turnPolicy = 'alien'
+    saved.state.sessionsById['broken-session'].currentRound = null
+    saved.state.activeSessionId = null
+    saved.state.round = null
+    localStorage.setItem('category-bomb-session-validation', JSON.stringify(saved))
+
+    const restored = createCategoryBombStore('category-bomb-session-validation', () => 0, localStorage, () => 1_000)
+    await restored.persist.rehydrate()
+    expect(Object.keys(restored.getState().sessionsById)).toEqual(['valid-session'])
+  })
+
+  it('clears a corrupt active round while preserving its saved roster and statistics', async () => {
+    const storageName = 'category-bomb-corrupt-active-only'
+    const source = createCategoryBombStore(storageName, () => 0, localStorage, () => 1_000, undefined, () => 'saved-session')
+    source.getState().createSession('Bomb Crew')
+    source.getState().startSetup(names(3), 'fair-cycle')
+    const saved = JSON.parse(localStorage.getItem(storageName)!)
+    saved.state.round.phase = 'ALIEN'
+    saved.state.sessionsById['saved-session'].currentRound.phase = 'ALIEN'
+    localStorage.setItem(storageName, JSON.stringify(saved))
+
+    const restored = createCategoryBombStore(storageName, () => 0, localStorage, () => 1_000)
+    await restored.persist.rehydrate()
+
+    expect(restored.getState().sessionsById['saved-session']).toMatchObject({ name: 'Bomb Crew', currentRound: null })
+    expect(restored.getState().sessionsById['saved-session'].players).toHaveLength(3)
+    expect(restored.getState().round).toBeNull()
+  })
+
+  it('rejects a self-valid top-level round whose roster differs from its saved session', async () => {
+    const storageName = 'category-bomb-mismatched-active-roster'
+    const source = createCategoryBombStore(storageName, () => 0, localStorage, () => 1_000, undefined, () => 'saved-session')
+    source.getState().createSession('Bomb Crew')
+    source.getState().startSetup(names(3), 'fair-cycle')
+    const saved = JSON.parse(localStorage.getItem(storageName)!)
+    saved.state.round.settings.players[0].name = 'Intruder'
+    localStorage.setItem(storageName, JSON.stringify(saved))
+
+    const restored = createCategoryBombStore(storageName, () => 0, localStorage, () => 1_000)
+    await restored.persist.rehydrate()
+    expect(restored.getState().sessionsById['saved-session']).toMatchObject({ name: 'Bomb Crew', currentRound: null })
+    expect(restored.getState().sessionsById['saved-session'].players[0].name).toBe('Player 1')
+  })
+
   it('clears the prior pass bonus feedback when hydrating an active round', async () => {
     const source = createCategoryBombStore('category-bomb-feedback-reset', () => 0, localStorage, () => 1_000)
     source.getState().startSetup(names(3), 'fair-cycle', { enabled: true, minMs: 500, maxMs: 500 })
@@ -138,6 +207,29 @@ describe('Category Bomb store', () => {
         passTimeBonusMinMs: 1_500,
         passTimeBonusMaxMs: 1_500,
       },
+    })
+  })
+
+  it('recovers a legacy exploded round without inventing retroactive statistics', async () => {
+    const storageName = 'category-bomb-legacy-exploded'
+    const source = createCategoryBombStore(storageName, () => 0, localStorage, () => 1_000)
+    source.getState().startSetup(names(3), 'fair-cycle')
+    source.getState().arm(1_000)
+    source.getState().callFoul(source.getState().round!.actionToken, 1_100)
+    const legacyRound = structuredClone(source.getState().round!) as unknown as Record<string, unknown>
+    delete legacyRound.startedAtMs
+    delete legacyRound.acceptedAnswerPlayerIds
+    delete legacyRound.statsRecorded
+    localStorage.setItem(storageName, JSON.stringify({ state: { round: legacyRound }, version: 1 }))
+
+    const restored = createCategoryBombStore(storageName, () => 0, localStorage, () => 1_200, undefined, () => 'recovered')
+    await restored.persist.rehydrate()
+
+    expect(restored.getState().sessionsById.recovered).toMatchObject({
+      name: 'Recovered Category Bomb',
+      completedBombs: 0,
+      totalSuccessfulAnswers: 0,
+      currentRound: { phase: 'EXPLODED', statsRecorded: true },
     })
   })
 

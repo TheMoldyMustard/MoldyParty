@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { getCategoryBombArrowAngle, type CategoryBombRound } from '../../domain/categoryBomb'
 import { categoryBombStore } from '../../store/categoryBombStore'
 import type { CategoryBombDeviceController } from './useCategoryBombDevices'
+import AbortGameDialog from '../game/AbortGameDialog'
 
 interface CategoryBombActiveScreenProps {
   round: CategoryBombRound
@@ -79,7 +80,7 @@ export default function CategoryBombActiveScreen({ round, devices, onExit }: Cat
   if (!currentPlayer) return null
   const arrowAngle = getCategoryBombArrowAngle(round)
   return <main className={`category-bomb-active category-bomb-active--${round.displayMode}`}>
-    <button className="text-button category-bomb-active__exit" type="button" onClick={onExit}>Exit</button>
+    <AbortGameDialog onConfirm={onExit} triggerClassName="text-button category-bomb-active__exit" />
     <div className="category-bomb-active__category"><span>Category</span><strong>{round.categoryLabel}</strong></div>
 
     {round.displayMode === 'radial' ? <div className="category-bomb-board category-bomb-board--active">

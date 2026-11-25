@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 
 interface AbortGameDialogProps {
   onConfirm: () => void
+  triggerClassName?: string
 }
 
-export default function AbortGameDialog({ onConfirm }: AbortGameDialogProps) {
+export default function AbortGameDialog({ onConfirm, triggerClassName = 'abort-game-trigger button button--danger' }: AbortGameDialogProps) {
   const [isOpen, setIsOpen] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDialogElement>(null)
@@ -50,7 +51,7 @@ export default function AbortGameDialog({ onConfirm }: AbortGameDialogProps) {
   }, [isOpen])
 
   return <>
-    <button ref={triggerRef} className="abort-game-trigger button button--danger" type="button" onClick={() => setIsOpen(true)}>Abort game</button>
+    <button ref={triggerRef} className={triggerClassName} type="button" onClick={() => setIsOpen(true)}>Abort game</button>
     {isOpen && <dialog ref={dialogRef} className="session-dialog" aria-labelledby="abort-game-title" aria-describedby="abort-game-description" onCancel={(event) => { event.preventDefault(); setIsOpen(false) }}>
       <span className="eyebrow">Discard unfinished round</span>
       <h2 id="abort-game-title">Abort this game?</h2>

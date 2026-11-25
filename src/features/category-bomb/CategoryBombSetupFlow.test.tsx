@@ -13,7 +13,7 @@ function names(count: number): string[] {
 describe('Category Bomb setup and pre-round screens', () => {
   beforeEach(() => {
     localStorage.clear()
-    categoryBombStore.setState({ round: null })
+    categoryBombStore.setState({ round: null, sessionsById: {}, activeSessionId: null, pendingSessionName: null })
   })
 
   it('validates names and starts a radial setup for twelve players', async () => {
@@ -23,6 +23,20 @@ describe('Category Bomb setup and pre-round screens', () => {
     expect(screen.getAllByRole('textbox')).toHaveLength(12)
     await user.click(screen.getByRole('button', { name: 'Arrange players' }))
     expect(categoryBombStore.getState().round).toMatchObject({ phase: 'PLACEMENT', displayMode: 'radial' })
+  })
+
+  it('locks the saved-session roster while still allowing rule changes', async () => {
+    const user = userEvent.setup()
+    render(<CategoryBombSetupScreen onBack={() => undefined} initialPlayerNames={names(3)} rosterLocked />)
+
+    expect(screen.getByText(/roster is locked for this saved session/i)).toBeInTheDocument()
+    expect(screen.getAllByRole('textbox')).toHaveLength(3)
+    screen.getAllByRole('textbox').forEach((input) => expect(input).toBeDisabled())
+    expect(screen.queryByRole('button', { name: 'Add player' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Remove player/i })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('radio', { name: /Chaos/i }))
+    expect(screen.getByRole('radio', { name: /Chaos/i })).toBeChecked()
   })
 
   it('switches automatically at the thirteenth player and returns to radial after removal', async () => {

@@ -3,6 +3,7 @@ import { getCurrentHolder, type CharadesSession } from '../../domain/charades'
 import { charadesStore } from '../../store/charadesStore'
 import { usePreferencesStore } from '../../store/preferencesStore'
 import type { CharadesDeviceController, CharadesDeviceStatus } from './useCharadesDevices'
+import AbortGameDialog from '../game/AbortGameDialog'
 
 interface GetReadyScreenProps {
   session: CharadesSession
@@ -69,7 +70,7 @@ export default function GetReadyScreen({ session, devices, deviceStatus, onExit 
         : 'Preparing tilt controls…'
 
   return <main className="charades-ready-screen">
-    <button className="text-button charades-exit" type="button" onClick={onExit}>Exit</button>
+    <AbortGameDialog onConfirm={onExit} triggerClassName="text-button charades-exit" />
     <span className="eyebrow">{session.settings.mode === 'team-relay' ? holder.teamName : session.settings.packName}</span>
     <h1>Get ready, {holder.memberName}</h1>
     {session.settings.mode === 'one-word' && <p>Each clue-giver may say exactly one word per card.</p>}

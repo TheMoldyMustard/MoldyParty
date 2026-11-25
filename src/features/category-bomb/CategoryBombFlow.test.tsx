@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from '../../App'
@@ -19,19 +19,33 @@ function start(count: number, bonus?: { enabled: boolean; minMs: number; maxMs: 
 describe('Category Bomb flow', () => {
   beforeEach(() => {
     localStorage.clear()
-    categoryBombStore.setState({ round: null })
+    categoryBombStore.setState({ round: null, sessionsById: {}, activeSessionId: null, pendingSessionName: null })
     appStore.setState({ activeGameId: null, recoveryNotice: '' })
   })
 
   afterEach(() => vi.useRealTimers())
 
-  it('opens Category Bomb setup from the home card', async () => {
+  it('opens Category Bomb sessions from the home card', async () => {
     const user = userEvent.setup()
     render(<App />)
     expect(screen.getByRole('heading', { name: 'Category Bomb', level: 2 })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /open category bomb/i }))
-    expect(screen.getByRole('heading', { name: 'Category Bomb', level: 1 })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Who’s playing?' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Category Bomb sessions' })).toBeInTheDocument()
+  })
+
+  it('confirms aborting an active bomb before discarding it', async () => {
+    start(3)
+    const onExit = vi.fn()
+    const user = userEvent.setup()
+    render(<CategoryBombGame onExit={onExit} onSetup={() => undefined} />)
+
+    await user.click(screen.getByRole('button', { name: 'Abort game' }))
+    expect(screen.getByRole('dialog', { name: 'Abort this game?' })).toBeInTheDocument()
+    expect(categoryBombStore.getState().round?.phase).toBe('ACTIVE')
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Abort game' }))
+
+    expect(categoryBombStore.getState().round).toBeNull()
+    expect(onExit).toHaveBeenCalledOnce()
   })
 
   it('renders radial players and passes without an award when the bonus is disabled', async () => {
@@ -133,6 +147,21 @@ describe('Category Bomb flow', () => {
     expect(categoryBombStore.getState().round?.settings.players).toHaveLength(3)
   })
 
+  it('shows a compact completed-bomb snapshot and returns to sessions', async () => {
+    vi.useFakeTimers()
+    start(3)
+    const onExit = vi.fn()
+    render(<CategoryBombGame onExit={onExit} onSetup={() => undefined} />)
+    fireEvent.click(screen.getByRole('button', { name: /accept .* answer and pass/i }))
+    fireEvent.pointerDown(screen.getByRole('button', { name: /hold to explode/i }))
+    act(() => vi.advanceTimersByTime(600))
+
+    expect(screen.getByLabelText('Completed bomb stats')).toHaveTextContent('1 accepted answer')
+    expect(screen.getByLabelText('Completed bomb stats')).toHaveTextContent('Foul explosion')
+    fireEvent.click(screen.getByRole('button', { name: 'Return to sessions' }))
+    expect(onExit).toHaveBeenCalledOnce()
+  })
+
   it('restarts devices and announces each re-armed explosion', () => {
     vi.useFakeTimers()
     start(3)
@@ -150,8 +179,7 @@ describe('Category Bomb flow', () => {
 
     explode()
     expect(devices.playExplosion).toHaveBeenCalledTimes(1)
-    fireEvent.click(screen.getByRole('button', { name: 'Rearrange players' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Arm bomb' }))
+    fireEvent.click(screen.getByRole('button', { name: 'New bomb' }))
     explode()
     expect(devices.playExplosion).toHaveBeenCalledTimes(2)
     fireEvent.click(screen.getByRole('button', { name: 'New bomb' }))

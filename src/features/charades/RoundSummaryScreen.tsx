@@ -11,10 +11,15 @@ export default function RoundSummaryScreen({ session, onExit }: RoundSummaryScre
   const [selectedWord, setSelectedWord] = useState<string | null>(null)
   const summary = session.turnSummaries.at(-1)
   if (!summary) return null
+  const cardEvents = summary.events.filter((event) => event.type === 'card')
+  const correct = cardEvents.filter((event) => event.outcome === 'correct').length
+  const passes = cardEvents.length - correct
+  const accuracy = cardEvents.length === 0 ? '—' : `${Math.round(correct / cardEvents.length * 100)}%`
   return <main className="screen charades-summary-screen">
     <span className="eyebrow">{summary.teamName ?? summary.holderName}</span>
     <h1>Round recap</h1>
     <strong className="summary-score">{summary.score} {summary.score === 1 ? 'point' : 'points'}</strong>
+    <div className="stats-summary" aria-label="Completed turn stats"><span><strong>{correct}</strong> correct</span><span><strong>{passes}</strong> passes</span><span><strong>{accuracy}</strong> accuracy</span></div>
     <ol className="charades-word-review">
       {summary.events.map((event, index) => event.type === 'foul'
         ? <li className="word-review word-review--foul" key={`foul-${event.occurredAtMs}-${index}`}>Foul · -5 seconds</li>
@@ -27,7 +32,7 @@ export default function RoundSummaryScreen({ session, onExit }: RoundSummaryScre
     </ol>
     <div className="button-row">
       <button className="button" type="button" onClick={() => charadesStore.getState().advanceFromSummary()}>{session.settings.mode === 'team-relay' ? 'Next turn' : 'Play another round'}</button>
-      <button className="button button--secondary" type="button" onClick={onExit}>Finish</button>
+      <button className="button button--secondary" type="button" onClick={onExit}>Return to sessions</button>
     </div>
   </main>
 }

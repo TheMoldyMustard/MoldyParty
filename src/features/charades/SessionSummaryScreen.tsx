@@ -15,6 +15,6 @@ export default function SessionSummaryScreen({ session, onExit }: SessionSummary
     <span className="eyebrow">Team Relay complete</span>
     <h1>{tied ? 'It’s a tie!' : `${teams[scores[0] === best ? 0 : 1].name} wins!`}</h1>
     <div className="relay-scoreboard">{teams.map((team, index) => <article className={scores[index] === best ? 'relay-score relay-score--leader' : 'relay-score'} key={team.id}><strong>{team.name}</strong><span>{scores[index]} points</span><small>{session.teamTurnCounts[index]} turns</small></article>)}</div>
-    <button className="button button--hero" type="button" onClick={onExit}>Back to MoldyParty</button>
+    <button className="button button--hero" type="button" onClick={onExit}>Return to sessions</button>
   </main>
 }

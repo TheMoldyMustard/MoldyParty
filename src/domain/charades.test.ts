@@ -53,9 +53,57 @@ describe('Charades mode policies and validation', () => {
       'Each team needs at least one member.',
     ]))
   })
+
+  it('rejects relay assignments with unknown, duplicated, or unassigned session players', () => {
+    const settings: CharadesSettings = {
+      ...classicSettings,
+      mode: 'team-relay',
+      players: [
+        { id: 'alex', name: 'Alex' },
+        { id: 'blair', name: 'Blair' },
+        { id: 'casey', name: 'Casey' },
+      ],
+      teams: [
+        { id: 'a', name: 'Molds', members: ['Alex', 'Ghost'], memberPlayerIds: ['alex', 'ghost'] },
+        { id: 'b', name: 'Spores', members: ['Alex'], memberPlayerIds: ['alex'] },
+      ],
+      relayRounds: 3,
+    }
+    expect(validateCharadesSettings(settings, 3)).toContain('Assign every player to exactly one team.')
+    expect(validateCharadesSettings({
+      ...settings,
+      teams: [
+        { id: 'a', name: 'Molds', members: ['Alex'], memberPlayerIds: ['alex'] },
+        { id: 'b', name: 'Spores', members: ['Blair', 'Casey'] },
+      ],
+    }, 3)).toContain('Assign every player to exactly one team.')
+  })
 })
 
 describe('Charades turn transitions', () => {
+  it('rotates stable non-relay holders and records their identity and active duration', () => {
+    const settings: CharadesSettings = {
+      ...classicSettings,
+      players: [
+        { id: 'alex', name: 'Alex' },
+        { id: 'blair', name: 'Blair' },
+      ],
+    }
+    let session = createCharadesSession(settings, cards, () => 0.99)
+    expect(getCurrentHolder(session)).toMatchObject({ playerId: 'alex', memberName: 'Alex' })
+    session = beginTurn(session, 1_000)
+    session = submitOutcome(session, 'correct', session.currentCardToken, 2_000, () => 0.99)
+    session = syncClock(session, 61_000)
+    expect(session.turnSummaries[0]).toMatchObject({
+      holderPlayerId: 'alex',
+      holderName: 'Alex',
+      activeDurationMs: 60_000,
+      statsRecorded: false,
+    })
+    session = advanceFromSummary(session)
+    expect(getCurrentHolder(session)).toMatchObject({ playerId: 'blair', memberName: 'Blair' })
+  })
+
   it('scores one card once and rejects a stale card token', () => {
     let session = createCharadesSession(classicSettings, cards, () => 0.99)
     session = beginTurn(session, 1_000)

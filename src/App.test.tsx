@@ -6,6 +6,7 @@ import App from './App'
 import { gameStore } from './store/gameStore'
 import { categoryBombStore } from './store/categoryBombStore'
 import { appStore } from './store/appStore'
+import { charadesStore } from './store/charadesStore'
 
 const setup = {
   playerNames: ['Alex', 'Blair', 'Casey'],
@@ -35,7 +36,8 @@ function completePrivateRound() {
 describe('MoldyParty app shell', () => {
   beforeEach(() => {
     localStorage.clear()
-    categoryBombStore.setState({ round: null })
+    categoryBombStore.setState({ round: null, sessionsById: {}, activeSessionId: null, pendingSessionName: null })
+    charadesStore.setState({ session: null, sessionsById: {}, activeSessionId: null, pendingSessionName: null })
     appStore.setState({ activeGameId: null, recoveryNotice: '' })
     gameStore.setState({
       setup: null,
@@ -68,6 +70,91 @@ describe('MoldyParty app shell', () => {
     expect(screen.queryByRole('button', { name: 'Continue a session' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'View session stats' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Delete session' })).not.toBeInTheDocument()
+  })
+
+  it('opens Category Bomb saved sessions and names a group before setup', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Open Category Bomb' }))
+    expect(screen.getByRole('heading', { name: 'Category Bomb sessions' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Create new session' }))
+    await user.type(screen.getByLabelText('Session name'), 'Bomb Squad')
+    await user.click(screen.getByRole('button', { name: 'Set up session' }))
+
+    expect(screen.getByRole('heading', { name: 'Category Bomb' })).toBeInTheDocument()
+    expect(categoryBombStore.getState().pendingSessionName).toBe('Bomb Squad')
+  })
+
+  it('opens Forehead Charades saved sessions and names a group before setup', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Open Forehead Charades' }))
+    expect(screen.getByRole('heading', { name: 'Forehead Charades sessions' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Create new session' }))
+    await user.type(screen.getByLabelText('Session name'), 'Guess Crew')
+    await user.click(screen.getByRole('button', { name: 'Set up session' }))
+
+    expect(screen.getByRole('heading', { name: 'Forehead Charades' })).toBeInTheDocument()
+    expect(charadesStore.getState().pendingSessionName).toBe('Guess Crew')
+  })
+
+  it('routes an unrecoverable active Charades pointer to its manager with a notice', async () => {
+    appStore.setState({ activeGameId: 'charades' })
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: 'Forehead Charades sessions' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(/unfinished Charades game could not be recovered/i)
+  })
+
+  it('views Forehead Charades stats and continues with a locked roster', async () => {
+    charadesStore.getState().createSession('Guess Crew')
+    charadesStore.getState().startSession({
+      mode: 'classic',
+      packId: 'test-pack',
+      packName: 'Test Pack',
+      durationSeconds: 60,
+      categories: [],
+      vibes: [],
+      motionEnabled: false,
+      henyoTapAnswersEnabled: false,
+      noRepeatEnabled: false,
+      players: [{ id: 'p1', name: 'Alex' }, { id: 'p2', name: 'Blair' }],
+    }, [{ word: 'Moon', category: 'object' }, { word: 'Star', category: 'object' }])
+    charadesStore.getState().resetSession()
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Open Forehead Charades' }))
+    await user.click(screen.getByRole('button', { name: 'View stats for Guess Crew' }))
+    expect(screen.getByRole('table', { name: 'Guess Crew Forehead Charades session stats' })).toHaveTextContent('Alex')
+    await user.click(screen.getByRole('button', { name: '← Sessions' }))
+    await user.click(screen.getByRole('button', { name: 'Continue Guess Crew' }))
+
+    expect(screen.getByLabelText('Player 1 name')).toHaveValue('Alex')
+    expect(screen.getByLabelText('Player 1 name')).toBeDisabled()
+    expect(screen.getByText(/roster is locked for this saved session/i)).toBeInTheDocument()
+  })
+
+  it('keeps a Charades session when its previous pack is unavailable and asks for another', async () => {
+    charadesStore.getState().createSession('Missing Pack Crew')
+    charadesStore.getState().startSession({
+      mode: 'classic', packId: 'removed-pack', packName: 'Removed Pack', durationSeconds: 60,
+      categories: [], vibes: [], motionEnabled: false, henyoTapAnswersEnabled: false, noRepeatEnabled: false,
+      players: [{ id: 'p1', name: 'Alex' }, { id: 'p2', name: 'Blair' }],
+    }, [{ word: 'Moon', category: 'object' }, { word: 'Star', category: 'object' }])
+    const sessionId = charadesStore.getState().activeSessionId!
+    charadesStore.getState().resetSession()
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Open Forehead Charades' }))
+    await user.click(screen.getByRole('button', { name: 'Continue Missing Pack Crew' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/Removed Pack is no longer available.*choose another pack/i)
+    expect(charadesStore.getState().sessionsById[sessionId]).toBeDefined()
+    expect(screen.getByLabelText('Player 1 name')).toHaveValue('Alex')
   })
 
   it('names a new session before opening round setup', async () => {

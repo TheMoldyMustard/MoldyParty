@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CharadesOutcome, CharadesSession } from '../../domain/charades'
 import { charadesStore } from '../../store/charadesStore'
 import type { CharadesDeviceController, CharadesDeviceStatus } from './useCharadesDevices'
+import AbortGameDialog from '../game/AbortGameDialog'
 
 const categoryLabels: Record<string, string> = {
   person: 'Person / Tao', place: 'Place / Lugar', object: 'Object / Bagay', animal: 'Animal / Hayop',
@@ -74,7 +75,7 @@ export default function ActiveRoundScreen({ session, devices, deviceStatus, onEx
     <button className="tap-zone tap-zone--pass" type="button" aria-label="Pass" onClick={() => record('pass')}><span>Pass</span></button>
     <button className="tap-zone tap-zone--correct" type="button" aria-label="Correct" onClick={() => record('correct')}><span>Correct</span></button>
     <div className="charades-hud">
-      <button className="text-button" type="button" onClick={onExit}>Exit</button>
+      <AbortGameDialog onConfirm={onExit} triggerClassName="text-button" />
       <strong className={remaining <= 10 ? 'charades-timer charades-timer--urgent' : 'charades-timer'}>{remaining}</strong>
       <span>{deviceStatus.motion === 'armed' ? 'Tilt ready' : 'Tap controls'}</span>
     </div>

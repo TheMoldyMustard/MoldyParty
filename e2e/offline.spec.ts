@@ -33,6 +33,9 @@ test('a saved custom pack remains available after an offline reload', async ({ p
 
   await page.goto('/')
   await page.getByRole('button', { name: 'Open Forehead Charades' }).click()
+  await page.getByRole('button', { name: 'Create new session' }).click()
+  await page.getByLabel('Session name').fill('Offline Charades')
+  await page.getByRole('button', { name: 'Set up session' }).click()
   await page.getByText('Offline Friends', { exact: true }).click()
   await expect(page.getByText('2 cards', { exact: true })).toBeVisible()
   await page.getByRole('checkbox', { name: /Tilt controls/ }).uncheck()
@@ -54,6 +57,9 @@ test('a saved custom pack remains available after an offline reload', async ({ p
 test('an active Category Bomb game recovers after an offline reload', async ({ page, context }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'Open Category Bomb' }).click()
+  await page.getByRole('button', { name: 'Create new session' }).click()
+  await page.getByLabel('Session name').fill('Offline Bomb')
+  await page.getByRole('button', { name: 'Set up session' }).click()
   for (const [index, name] of ['Alex', 'Blair', 'Casey'].entries()) {
     await page.getByLabel(`Player ${index + 1} name`).fill(name)
   }

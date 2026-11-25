@@ -107,6 +107,18 @@ describe('Category Bomb validation and display modes', () => {
 })
 
 describe('Category Bomb timer and turn policies', () => {
+  it('attributes each accepted answer to the holder before passing the turn', () => {
+    let round = activeRound(3)
+    const firstHolder = round.currentPlayerId
+    round = acceptCategoryBombAnswer(round, round.actionToken, 1_100, () => 0)
+    const secondHolder = round.currentPlayerId
+    round = acceptCategoryBombAnswer(round, round.actionToken, 1_200, () => 0)
+
+    expect(round.acceptedAnswerPlayerIds).toEqual([firstHolder, secondHolder])
+    expect(round.startedAtMs).toBe(1_000)
+    expect(round.statsRecorded).toBe(false)
+  })
+
   it('samples inclusive player-relative duration boundaries', () => {
     expect(sampleCategoryBombDurationMs(2, () => 0)).toBe(26_000)
     expect(sampleCategoryBombDurationMs(2, () => 0.999999)).toBe(40_000)

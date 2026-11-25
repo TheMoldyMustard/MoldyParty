@@ -28,16 +28,23 @@ export default function CharadesGame({ onExit }: CharadesGameProps) {
     if (session?.phase === 'ROUND_SUMMARY' || session?.phase === 'SESSION_SUMMARY') void devices.stop()
   }, [devices, session?.phase])
 
-  function exit() {
+  function finish() {
     void devices.stop()
     charadesStore.getState().resetSession()
     appStore.getState().setActiveGame(null)
     onExit()
   }
 
+  function abort() {
+    void devices.stop()
+    charadesStore.getState().abortSession()
+    appStore.getState().setActiveGame(null)
+    onExit()
+  }
+
   if (!session) return null
-  if (session.phase === 'GET_READY') return <GetReadyScreen session={session} devices={devices} deviceStatus={deviceStatus} onExit={exit} />
-  if (session.phase === 'ACTIVE') return <ActiveRoundScreen session={session} devices={devices} deviceStatus={deviceStatus} onExit={exit} />
-  if (session.phase === 'ROUND_SUMMARY') return <RoundSummaryScreen session={session} onExit={exit} />
-  return <SessionSummaryScreen session={session} onExit={exit} />
+  if (session.phase === 'GET_READY') return <GetReadyScreen session={session} devices={devices} deviceStatus={deviceStatus} onExit={abort} />
+  if (session.phase === 'ACTIVE') return <ActiveRoundScreen session={session} devices={devices} deviceStatus={deviceStatus} onExit={abort} />
+  if (session.phase === 'ROUND_SUMMARY') return <RoundSummaryScreen session={session} onExit={finish} />
+  return <SessionSummaryScreen session={session} onExit={finish} />
 }

@@ -35,25 +35,25 @@ Install Playwright's browser once on a new machine with `npx playwright install 
 
 ### Category Bomb
 
-1. Add at least two uniquely named players and choose **Fair cycle** or **Chaos**. Fair cycle gives everyone one turn before reshuffling; Chaos may choose any player except the person who just answered.
+1. Open **Category Bomb**, create or continue a named local session, then add at least two uniquely named players. The roster becomes fixed after the first bomb starts. Choose **Fair cycle** or **Chaos**; Fair cycle gives everyone one turn before reshuffling, while Chaos may choose any player except the person who just answered.
 2. With 2–12 players, place the phone in the center and arrange the names around it. The center arrow points toward the current player. With 13 or more players, the game switches to a large-name view with no seating board or arrow, so the phone can be passed directly.
 3. Read the category, say a valid item, then tap the bomb and pass the phone to the next named player. **Add random time on pass** is off by default; when enabled, choose a 0.0–10.0-second minimum and maximum in 0.1-second steps (initially 0.5–3.0 seconds). Each accepted pass samples within that range, while a 15-second total cap keeps the round bounded. The random fuse length scales with the group size and is never displayed.
 4. The group self-moderates repetition and invalid answers: hold the foul control for 600 ms to explode the current player. A normal expiry also reveals the player holding the turn when the fuse ends.
-5. Select **New bomb** to keep the roster and rules while drawing a new category, or return to placement/rules before the next round.
+5. The result shows accepted answers and the explosion cause. Select **New bomb** to keep the roster and rules while drawing a new category, **Review rules** before the next bomb, or **Return to sessions**.
 
 The active round and wall-clock deadline are stored locally. Reloading—even offline after the app has been cached—recovers the same round and immediately reconciles an expired fuse. Sound, vibration, and wake lock are progressive enhancements; the visible tap controls always remain available.
 
 ### Forehead Charades
 
-1. Open **Forehead Charades**, choose a compatible shared pack, and optionally narrow it by category or vibe.
-2. Pick **Classic** (60/75/90 seconds), **Henyo** (fixed 2:00), **One-Word**, or **Team Relay** with two named rosters and 3–5 turns per team.
+1. Open **Forehead Charades**, create or continue a named local session, and define the player roster used by every mode. The roster becomes fixed after the first game starts.
+2. Choose a compatible shared pack and optional category/vibe filters, then pick **Classic** (60/75/90 seconds), **Henyo** (fixed 2:00), **One-Word**, or **Team Relay**. Relay assigns every saved player to exactly one of two teams for 3–5 turns per team; assignments may change between games without changing player identity.
 3. Press **Start Get Ready** while holding the phone in its neutral forehead position. The first second calibrates motion input; the full three-second countdown also requests landscape and a screen wake lock when the browser supports them.
 4. Follow the guided setup: hold the phone neutral, tilt the phone face up to teach **Correct**, then return to neutral. During play, repeat that face-up tilt for **Correct** or tilt in the opposite direction for **Pass**. The right and left tap zones—and Arrow Right and Arrow Left on desktop—remain available when motion is disabled or unavailable.
 5. Henyo shows a bilingual category anchor plus optional **Oo / Hindi / Pwede** sound buttons. **Foul (-5s)** shortens the clock without changing the card.
 6. Correct/pass feedback uses generated Web Audio tones, optional vibration, text, and a brief color flash. Sound and haptics can be disabled in setup; no audio files are downloaded.
 7. The recap preserves every played word in order. Team Relay alternates teams, rotates holders, and totals scores after both teams finish all configured turns.
 
-The current round, deadline, teams, and no-repeat history are stored locally, so an accidental refresh resumes the same game. Motion, wake lock, vibration, and orientation lock are progressive enhancements; unsupported or declined APIs never prevent tap play.
+The current round, deadline, teams, and no-repeat history are stored locally, so an accidental refresh resumes the same game. Finishing returns to the saved-session manager; aborting an unfinished turn requires confirmation and does not add statistics. Motion, wake lock, vibration, and orientation lock are progressive enhancements; unsupported or declined APIs never prevent tap play.
 
 ### Impostor
 
@@ -69,11 +69,13 @@ The current round, deadline, teams, and no-repeat history are stored locally, so
 
 ## Local sessions and statistics
 
-Clicking **Impostor** opens the local session manager. Click a saved-session card to continue it. Each card also has quick icons to rename the session, inspect its statistics table, or permanently delete it after confirmation. Renaming changes only the session label; the player roster and its statistics stay attached to the same people. Sessions are stored only in the current browser profile.
+Clicking **Impostor**, **Category Bomb**, or **Forehead Charades** opens that game's local session manager. Click a saved-session card to continue it. Each card also has quick icons to rename the session, inspect its statistics table, or permanently delete it after confirmation. Renaming changes only the session label; the stable player roster and its statistics stay attached to the same people. Sessions are stored only in the current browser profile.
 
 After a completed round, **Change category** returns directly to the category picker and keeps the current session active. **Return to sessions** leaves the round setup and opens the saved-session manager.
 
-Each completed round tracks every player's role appearances, total and per-role wins/losses, correct Impostor votes, wrong Innocent guesses, votes for the Jester, times voted out as Jester, and correct Outlier word guesses. Private ballots can be attributed to individual players. Group Vote still affects role wins and losses, but it does not add individual vote-accuracy or Jester-vote credit because the ballot has no individual voter.
+Impostor tracks every player's role appearances, total and per-role wins/losses, correct Impostor votes, wrong Innocent guesses, votes for the Jester, times voted out as Jester, and correct Outlier word guesses. Private ballots can be attributed to individual players. Group Vote still affects role wins and losses, but it does not add individual vote-accuracy or Jester-vote credit because the ballot has no individual voter.
+
+Category Bomb commits statistics only when a bomb explodes. It tracks accepted answers, timer/foul explosions, bombs survived, and each player's best answer count in one bomb; it never claims the group-moderated answers were objectively correct or exposes the hidden fuse. Forehead Charades commits only completed turns, tracking correct cards, passes, accuracy, best turn, correct streak, Henyo fouls, mode/category breakdowns, and relay win/loss/tie results. Reloading, replaying, or revisiting a result cannot count the same terminal result twice.
 
 ## Custom packs
 

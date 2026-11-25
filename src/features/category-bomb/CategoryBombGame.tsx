@@ -33,11 +33,14 @@ export default function CategoryBombGame({ onExit, onSetup, deviceController }: 
   const arm = () => { void devices.start(); categoryBombStore.getState().arm() }
   if (round.phase === 'PLACEMENT') return <CategoryBombPlacementScreen round={round} onBack={onSetup} onArm={arm} />
   if (round.phase === 'READY') return <CategoryBombReadyScreen round={round} onBack={onSetup} onArm={arm} />
-  if (round.phase === 'ACTIVE') return <CategoryBombActiveScreen round={round} devices={devices} onExit={onExit} />
+  if (round.phase === 'ACTIVE') return <CategoryBombActiveScreen round={round} devices={devices} onExit={() => {
+    categoryBombStore.getState().abortRound()
+    onExit()
+  }} />
   return <CategoryBombExplosionScreen
     round={round}
     onExit={onExit}
     onReplay={() => { void devices.start(); categoryBombStore.getState().replay() }}
-    onReturnToPreRound={() => categoryBombStore.getState().returnToPreRound()}
+    onReviewRules={onSetup}
   />
 }

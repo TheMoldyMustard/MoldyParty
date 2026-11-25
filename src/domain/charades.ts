@@ -4,10 +4,16 @@ export type CharadesMode = 'classic' | 'henyo' | 'one-word' | 'team-relay'
 export type CharadesPhase = 'GET_READY' | 'ACTIVE' | 'ROUND_SUMMARY' | 'SESSION_SUMMARY'
 export type CharadesOutcome = 'correct' | 'pass'
 
+export interface CharadesPlayer {
+  id: string
+  name: string
+}
+
 export interface CharadesTeam {
   id: string
   name: string
   members: string[]
+  memberPlayerIds?: string[]
 }
 
 export interface CharadesSettings {
@@ -22,6 +28,8 @@ export interface CharadesSettings {
   noRepeatEnabled: boolean
   teams?: [CharadesTeam, CharadesTeam]
   relayRounds?: 3 | 4 | 5
+  players?: CharadesPlayer[]
+  holderRotationOffset?: number
 }
 
 export interface CharadesCard {
@@ -51,8 +59,11 @@ export interface CharadesTurnSummary {
   teamId: string | null
   teamName: string | null
   holderName: string
+  holderPlayerId: string | null
   score: number
   events: CharadesTurnEvent[]
+  activeDurationMs: number
+  statsRecorded: boolean
 }
 
 export interface CharadesSession {
@@ -68,6 +79,8 @@ export interface CharadesSession {
   turnSummaries: CharadesTurnSummary[]
   activeTeamIndex: 0 | 1
   teamTurnCounts: [number, number]
+  startedAtMs: number | null
+  relayResultRecorded: boolean
 }
 
 export interface ModePolicy {
@@ -90,6 +103,16 @@ export function validateCharadesSettings(settings: CharadesSettings, eligibleCou
     errors.push(`Choose a valid duration for ${policy.label} mode.`)
   }
   if (eligibleCount < 2) errors.push('Choose filters with at least 2 eligible words.')
+  if (settings.players) {
+    const ids = settings.players.map((player) => player.id)
+    const names = settings.players.map((player) => player.name.trim().toLocaleLowerCase())
+    if (settings.players.length < 2) errors.push('Add at least 2 players.')
+    if (ids.some((id) => !id) || new Set(ids).size !== ids.length) errors.push('Every player needs a unique id.')
+    if (names.some((name) => !name) || new Set(names).size !== names.length) errors.push('Player names must be present and unique.')
+    if (settings.holderRotationOffset !== undefined && (!Number.isInteger(settings.holderRotationOffset) || settings.holderRotationOffset < 0 || settings.holderRotationOffset >= settings.players.length)) {
+      errors.push('The player rotation position is invalid.')
+    }
+  }
   if (settings.mode === 'team-relay') {
     const teams = settings.teams
     if (!teams || teams.some((team) => !team.name.trim())) errors.push('Both teams need a name.')
@@ -98,6 +121,14 @@ export function validateCharadesSettings(settings: CharadesSettings, eligibleCou
     }
     if (!settings.relayRounds || !MODE_POLICIES['team-relay'].relayRounds?.includes(settings.relayRounds)) {
       errors.push('Choose 3, 4, or 5 relay rounds.')
+    }
+    if (settings.players) {
+      const hasStableAssignments = Boolean(teams?.every((team) => Array.isArray(team.memberPlayerIds)))
+      const playerIds = settings.players.map((player) => player.id)
+      const assigned = hasStableAssignments ? teams!.flatMap((team) => team.memberPlayerIds ?? []) : []
+      if (!hasStableAssignments || assigned.length !== playerIds.length || new Set(assigned).size !== playerIds.length || assigned.some((id) => !playerIds.includes(id))) {
+        errors.push('Assign every player to exactly one team.')
+      }
     }
   }
   return errors
@@ -163,17 +194,26 @@ export function createCharadesSession(
     turnSummaries: [],
     activeTeamIndex: 0,
     teamTurnCounts: [0, 0],
+    startedAtMs: null,
+    relayResultRecorded: false,
   }
 }
 
-export function getCurrentHolder(session: CharadesSession): { teamId: string | null; teamName: string | null; memberName: string } {
+export function getCurrentHolder(session: CharadesSession): { teamId: string | null; teamName: string | null; playerId: string | null; memberName: string } {
   if (session.settings.mode !== 'team-relay' || !session.settings.teams) {
-    return { teamId: null, teamName: null, memberName: 'Next player' }
+    const players = session.settings.players
+    const offset = session.settings.holderRotationOffset ?? 0
+    const player = players?.[(offset + session.turnSummaries.length) % players.length]
+    return { teamId: null, teamName: null, playerId: player?.id ?? null, memberName: player?.name ?? 'Next player' }
   }
   const teamIndex = session.activeTeamIndex
   const team = session.settings.teams[teamIndex]
   const memberIndex = session.teamTurnCounts[teamIndex] % team.members.length
-  return { teamId: team.id, teamName: team.name, memberName: team.members[memberIndex] }
+  const playerId = team.memberPlayerIds?.[memberIndex] ?? null
+  const memberName = playerId
+    ? session.settings.players?.find((player) => player.id === playerId)?.name ?? team.members[memberIndex]
+    : team.members[memberIndex]
+  return { teamId: team.id, teamName: team.name, playerId, memberName }
 }
 
 function takeNextCard(session: CharadesSession, random: () => number): Pick<CharadesSession, 'currentCard' | 'remainingDeck'> {
@@ -193,6 +233,7 @@ export function beginTurn(session: CharadesSession, now: number, random: () => n
     currentCardToken: session.currentCardToken + 1,
     deadlineMs: now + session.settings.durationSeconds * 1000,
     currentEvents: [],
+    startedAtMs: now,
   }
 }
 
@@ -203,8 +244,11 @@ function finalizeTurn(session: CharadesSession): CharadesSession {
     teamId: holder.teamId,
     teamName: holder.teamName,
     holderName: holder.memberName,
+    holderPlayerId: holder.playerId,
     score: session.currentEvents.filter((event) => event.type === 'card' && event.outcome === 'correct').length,
     events: session.currentEvents,
+    activeDurationMs: session.startedAtMs === null || session.deadlineMs === null ? 0 : Math.max(0, session.deadlineMs - session.startedAtMs),
+    statsRecorded: false,
   }
   const counts: [number, number] = [...session.teamTurnCounts]
   if (session.settings.mode === 'team-relay') counts[session.activeTeamIndex] += 1
@@ -213,6 +257,7 @@ function finalizeTurn(session: CharadesSession): CharadesSession {
     phase: 'ROUND_SUMMARY',
     currentCard: null,
     deadlineMs: null,
+    startedAtMs: null,
     turnSummaries: [...session.turnSummaries, summary],
     teamTurnCounts: counts,
   }

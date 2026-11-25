@@ -39,6 +39,9 @@ export interface CategoryBombRound {
   actionToken: number
   explodedPlayerId: string | null
   explosionReason: CategoryBombExplosionReason | null
+  startedAtMs: number | null
+  acceptedAnswerPlayerIds: string[]
+  statsRecorded: boolean
 }
 
 const seats: CategoryBombSeat[] = [
@@ -186,6 +189,9 @@ export function createCategoryBombRound(
     actionToken: 0,
     explodedPlayerId: null,
     explosionReason: null,
+    startedAtMs: null,
+    acceptedAnswerPlayerIds: [],
+    statsRecorded: false,
   }
 }
 
@@ -219,6 +225,9 @@ export function armCategoryBombRound(round: CategoryBombRound, random: () => num
     actionToken: round.actionToken + 1,
     explodedPlayerId: null,
     explosionReason: null,
+    startedAtMs: now,
+    acceptedAnswerPlayerIds: [],
+    statsRecorded: false,
   }
 }
 
@@ -241,13 +250,15 @@ export function acceptCategoryBombAnswer(
   random: () => number = Math.random,
 ): CategoryBombRound {
   const current = syncCategoryBombClock(round, now)
-  if (current !== round || round.phase !== 'ACTIVE' || round.deadlineMs === null || actionToken !== round.actionToken) return current
+  if (current !== round || round.phase !== 'ACTIVE' || round.deadlineMs === null || !round.currentPlayerId || actionToken !== round.actionToken) return current
+  const answeringPlayerId = round.currentPlayerId
   const sampledBonus = sampleCategoryBombPassBonusMs(round.settings, random)
   const extension = Math.min(sampledBonus, Math.max(0, 15_000 - round.extensionGrantedMs))
   const next = nextPlayer(round, random)
   return {
     ...round,
     ...next,
+    acceptedAnswerPlayerIds: [...round.acceptedAnswerPlayerIds, answeringPlayerId],
     deadlineMs: round.deadlineMs + extension,
     extensionGrantedMs: round.extensionGrantedMs + extension,
     lastAppliedPassBonusMs: extension,
@@ -288,6 +299,9 @@ export function replayCategoryBombRound(
     actionToken: 0,
     explodedPlayerId: null,
     explosionReason: null,
+    startedAtMs: null,
+    acceptedAnswerPlayerIds: [],
+    statsRecorded: false,
   }
   return armCategoryBombRound(prepared, random, now)
 }

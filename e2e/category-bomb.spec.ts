@@ -3,6 +3,9 @@ import { expect, test, type Page } from '@playwright/test'
 async function openCategoryBomb(page: Page, names: string[]) {
   await page.goto('/')
   await page.getByRole('button', { name: 'Open Category Bomb' }).click()
+  await page.getByRole('button', { name: 'Create new session' }).click()
+  await page.getByLabel('Session name').fill('Bomb Crew')
+  await page.getByRole('button', { name: 'Set up session' }).click()
   for (let index = 3; index > names.length; index -= 1) {
     await page.getByRole('button', { name: `Remove player ${index}` }).click()
   }
@@ -104,7 +107,7 @@ test('twelve maximum-length names remain separated in portrait and landscape', a
 
   for (const viewport of [{ width: 390, height: 844 }, { width: 667, height: 375 }]) {
     await page.setViewportSize(viewport)
-    await expect(page.getByRole('button', { name: 'Exit' })).toBeInViewport()
+    await expect(page.getByRole('button', { name: 'Abort game' })).toBeInViewport()
     await expect(page.locator('.category-bomb-active__category span')).toBeInViewport()
     await expect(page.locator('.category-bomb-active__category strong')).toBeInViewport()
     await expectBoxesNotToOverlap(page, '[data-testid="category-bomb-active-seat"]')
@@ -148,4 +151,25 @@ test('a fifty-player roster can enter name-only play', async ({ page }) => {
   await page.getByRole('button', { name: 'Arm bomb' }).click()
   await expect(page.locator('.category-bomb-active--name-only h1')).toHaveText(/Guest \d+/)
   await expect(page.getByTestId('category-bomb-arrow')).toHaveCount(0)
+})
+
+test('completed bomb stats survive return and continuation', async ({ page }) => {
+  await openCategoryBomb(page, ['Alex', 'Blair', 'Casey'])
+  await page.getByRole('button', { name: 'Arrange players' }).click()
+  await page.clock.install()
+  await page.getByRole('button', { name: 'Arm bomb' }).click()
+  await page.getByRole('button', { name: /Accept .* answer and pass/ }).click()
+  await page.clock.fastForward(120_000)
+
+  await expect(page.getByLabel('Completed bomb stats')).toContainText('1 accepted answer')
+  await page.getByRole('button', { name: 'Return to sessions' }).click()
+  await expect(page.getByRole('heading', { name: 'Category Bomb sessions' })).toBeVisible()
+  await page.getByRole('button', { name: 'View stats for Bomb Crew' }).click()
+  await expect(page.getByRole('table', { name: 'Bomb Crew Category Bomb session stats' })).toContainText('Alex')
+  await expect(page.getByLabel('Category Bomb session totals')).toContainText('1 bombs')
+
+  await page.getByRole('button', { name: '← Sessions' }).click()
+  await page.getByRole('button', { name: 'Continue Bomb Crew' }).click()
+  await expect(page.getByLabel('Player 1 name')).toHaveValue('Alex')
+  await expect(page.getByLabel('Player 1 name')).toBeDisabled()
 })

@@ -11,6 +11,7 @@ interface CategoryBombSetupScreenProps {
   initialPassTimeBonusEnabled?: boolean
   initialPassTimeBonusMinSeconds?: number
   initialPassTimeBonusMaxSeconds?: number
+  rosterLocked?: boolean
 }
 
 export default function CategoryBombSetupScreen({
@@ -20,6 +21,7 @@ export default function CategoryBombSetupScreen({
   initialPassTimeBonusEnabled = false,
   initialPassTimeBonusMinSeconds = 0.5,
   initialPassTimeBonusMaxSeconds = 3,
+  rosterLocked = false,
 }: CategoryBombSetupScreenProps) {
   const [names, setNames] = useState(initialPlayerNames)
   const [turnPolicy, setTurnPolicy] = useState<CategoryBombTurnPolicy>(initialTurnPolicy)
@@ -69,18 +71,19 @@ export default function CategoryBombSetupScreen({
 
     <section className="setup-section" aria-labelledby="category-bomb-players">
       <div className="section-heading"><div><span className="step-number">01</span><h2 id="category-bomb-players">Who’s playing?</h2></div><span className="muted">2 minimum · 24 characters</span></div>
+      {rosterLocked && <p className="muted">The roster is locked for this saved session. You can still change the rules for the next bomb.</p>}
       <div className="player-list category-bomb-player-list">
         {names.map((name, index) => <div className="player-input" key={index}>
           <span className="player-number" aria-hidden="true">{index + 1}</span>
           <label className="sr-only" htmlFor={`category-player-${index}`}>Player {index + 1} name</label>
-          <input id={`category-player-${index}`} value={name} placeholder={`Player ${index + 1}`} autoComplete="off" onChange={(event) => {
+          <input id={`category-player-${index}`} value={name} placeholder={`Player ${index + 1}`} autoComplete="off" disabled={rosterLocked} onChange={(event) => {
             const nextName = [...event.target.value].slice(0, 24).join('')
             setNames((current) => current.map((item, itemIndex) => itemIndex === index ? nextName : item))
           }} />
-          {names.length > 2 && <button className="icon-button" type="button" aria-label={`Remove player ${index + 1}`} onClick={() => setNames((current) => current.filter((_, itemIndex) => itemIndex !== index))}>×</button>}
+          {!rosterLocked && names.length > 2 && <button className="icon-button" type="button" aria-label={`Remove player ${index + 1}`} onClick={() => setNames((current) => current.filter((_, itemIndex) => itemIndex !== index))}>×</button>}
         </div>)}
       </div>
-      <button className="button button--secondary button--wide" type="button" aria-label="Add player" onClick={() => setNames((current) => [...current, ''])}>＋ Add player</button>
+      {!rosterLocked && <button className="button button--secondary button--wide" type="button" aria-label="Add player" onClick={() => setNames((current) => [...current, ''])}>＋ Add player</button>}
     </section>
 
     <section className="setup-section" aria-labelledby="category-bomb-layout">
