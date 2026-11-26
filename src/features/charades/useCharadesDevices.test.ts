@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createOrientationRecognizer } from './orientationInput'
+import { createTiltRecognizer } from './tiltInput'
 import { createCharadesDeviceController, type CharadesDeviceControllerDependencies } from './useCharadesDevices'
 
 function fakeTarget() {
@@ -19,8 +19,8 @@ function fakeTarget() {
   }
 }
 
-function orientation(beta: number, gamma: number) {
-  return Object.assign(new Event('deviceorientation'), { beta, gamma })
+function motion(x: number, y: number, z: number) {
+  return Object.assign(new Event('devicemotion'), { accelerationIncludingGravity: { x, y, z } })
 }
 
 function dependencies(overrides: Partial<CharadesDeviceControllerDependencies> = {}): CharadesDeviceControllerDependencies {
@@ -35,7 +35,7 @@ function dependencies(overrides: Partial<CharadesDeviceControllerDependencies> =
     unlockOrientation: vi.fn(),
     audio: { unlock: vi.fn(), play: vi.fn(), playCountdown: vi.fn(), setEnabled: vi.fn(), dispose: vi.fn() },
     vibrationNavigator: {},
-    recognizer: createOrientationRecognizer(),
+    recognizer: createTiltRecognizer(),
     onOutcome: vi.fn().mockReturnValue(true),
     ...overrides,
   }
@@ -71,26 +71,26 @@ describe('Charades device controller', () => {
       now: () => now,
       audio,
       vibrationNavigator: { vibrate },
-      recognizer: createOrientationRecognizer({ minimumSamples: 2, gestureCalibrationMs: 0, minimumGestureSamples: 2, dwellMs: 0 }),
+      recognizer: createTiltRecognizer({ minimumSamples: 2, gestureCalibrationMs: 0, minimumGestureSamples: 2, dwellMs: 0 }),
       onOutcome,
     }))
 
     await controller.start({ motionEnabled: true, soundEnabled: true, hapticsEnabled: true })
     expect(controller.getStatus().motion).toBe('calibrating-neutral')
-    windowTarget.dispatch('deviceorientation', orientation(10, 0))
+    windowTarget.dispatch('devicemotion', motion(9.8, 0, 0))
     now = 1_000
-    windowTarget.dispatch('deviceorientation', orientation(10, 0))
+    windowTarget.dispatch('devicemotion', motion(9.8, 0, 0))
     expect(controller.getStatus().motion).toBe('calibrating-correct')
     now = 1_100
-    windowTarget.dispatch('deviceorientation', orientation(40, 0))
-    windowTarget.dispatch('deviceorientation', orientation(40, 0))
+    windowTarget.dispatch('devicemotion', motion(8.487, 0, 4.9))
+    windowTarget.dispatch('devicemotion', motion(8.487, 0, 4.9))
     expect(controller.getStatus().motion).toBe('returning-neutral')
-    windowTarget.dispatch('deviceorientation', orientation(10, 0))
+    windowTarget.dispatch('devicemotion', motion(9.8, 0, 0))
     expect(controller.getStatus().motion).toBe('armed')
 
     controller.beginGameplay()
-    windowTarget.dispatch('deviceorientation', orientation(40, 0))
-    windowTarget.dispatch('deviceorientation', orientation(40, 0))
+    windowTarget.dispatch('devicemotion', motion(8.487, 0, 4.9))
+    windowTarget.dispatch('devicemotion', motion(8.487, 0, 4.9))
 
     expect(onOutcome).toHaveBeenCalledWith('correct')
     expect(audio.play).toHaveBeenCalledWith('correct')
@@ -106,31 +106,31 @@ describe('Charades device controller', () => {
       windowTarget,
       getAngle: () => angle,
       now: () => now,
-      recognizer: createOrientationRecognizer({ minimumSamples: 2, gestureCalibrationMs: 0, minimumGestureSamples: 2, dwellMs: 0 }),
+      recognizer: createTiltRecognizer({ minimumSamples: 2, gestureCalibrationMs: 0, minimumGestureSamples: 2, dwellMs: 0 }),
       onOutcome,
     }))
 
     await controller.start({ motionEnabled: true, soundEnabled: false, hapticsEnabled: false })
-    windowTarget.dispatch('deviceorientation', orientation(10, 0))
+    windowTarget.dispatch('devicemotion', motion(9.8, 0, 0))
     now = 1_000
-    windowTarget.dispatch('deviceorientation', orientation(10, 0))
+    windowTarget.dispatch('devicemotion', motion(9.8, 0, 0))
     expect(controller.getStatus().motion).toBe('calibrating-correct')
 
     angle = 90
     now = 1_100
-    windowTarget.dispatch('deviceorientation', orientation(10, 0))
+    windowTarget.dispatch('devicemotion', motion(9.8, 0, 0))
     expect(controller.getStatus().motion).toBe('calibrating-neutral')
     now = 2_100
-    windowTarget.dispatch('deviceorientation', orientation(10, 0))
+    windowTarget.dispatch('devicemotion', motion(9.8, 0, 0))
     now = 2_200
-    windowTarget.dispatch('deviceorientation', orientation(10, 30))
-    windowTarget.dispatch('deviceorientation', orientation(10, 30))
-    windowTarget.dispatch('deviceorientation', orientation(10, 0))
+    windowTarget.dispatch('devicemotion', motion(8.487, 0, 4.9))
+    windowTarget.dispatch('devicemotion', motion(8.487, 0, 4.9))
+    windowTarget.dispatch('devicemotion', motion(9.8, 0, 0))
     expect(controller.getStatus().motion).toBe('armed')
 
     controller.beginGameplay()
     angle = 0
-    windowTarget.dispatch('deviceorientation', orientation(10, 30))
+    windowTarget.dispatch('devicemotion', motion(8.487, 0, 4.9))
     expect(controller.getStatus().motion).toBe('failed')
     expect(onOutcome).not.toHaveBeenCalled()
   })
@@ -145,6 +145,21 @@ describe('Charades device controller', () => {
     const status = await controller.start({ motionEnabled: true, soundEnabled: false, hapticsEnabled: false })
 
     expect(status.motion).toBe('denied')
-    expect(windowTarget.addEventListener).not.toHaveBeenCalledWith('deviceorientation', expect.any(Function))
+    expect(windowTarget.addEventListener).not.toHaveBeenCalledWith('devicemotion', expect.any(Function))
+  })
+
+  it('ignores missing gravity vectors and removes the motion listener on stop', async () => {
+    const windowTarget = fakeTarget()
+    const onOutcome = vi.fn().mockReturnValue(true)
+    const controller = createCharadesDeviceController(dependencies({ windowTarget, onOutcome }))
+
+    await controller.start({ motionEnabled: true, soundEnabled: false, hapticsEnabled: false })
+    windowTarget.dispatch('devicemotion', Object.assign(new Event('devicemotion'), { accelerationIncludingGravity: null }))
+    expect(controller.getStatus().motion).toBe('calibrating-neutral')
+
+    await controller.stop()
+    expect(windowTarget.removeEventListener).toHaveBeenCalledWith('devicemotion', expect.any(Function))
+    windowTarget.dispatch('devicemotion', motion(8.487, 0, 4.9))
+    expect(onOutcome).not.toHaveBeenCalled()
   })
 })

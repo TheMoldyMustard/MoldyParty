@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import type { CharadesOutcome } from '../../domain/charades'
 import { createAudioSynth, type AudioCue, type AudioSynth } from './audioSynth'
 import { vibrateForOutcome, type VibrationNavigatorLike } from './haptics'
-import { createOrientationRecognizer, type OrientationRecognizer, type OrientationRecognizerStatus } from './orientationInput'
 import { getOrientationAngle, lockLandscape as requestLandscape, unlockOrientation as releaseOrientation } from './orientationLock'
-import { requestOrientationPermission as requestBrowserOrientation, type OrientationConstructorLike, type OrientationPermissionStatus } from './orientationPermission'
+import { requestSensorPermission as requestBrowserSensor, type SensorConstructorLike, type SensorPermissionStatus } from './sensorPermission'
+import { createTiltRecognizer, type TiltRecognizer, type TiltRecognizerStatus } from './tiltInput'
 import { createWakeLockManager, type WakeLockManager, type WakeLockLike } from './wakeLock'
 
 interface EventTargetLike {
@@ -31,7 +31,7 @@ export interface CharadesDeviceStartOptions {
 export interface CharadesDeviceControllerDependencies {
   windowTarget: EventTargetLike
   documentTarget: VisibilityTargetLike
-  requestPermission: () => Promise<OrientationPermissionStatus>
+  requestPermission: () => Promise<SensorPermissionStatus>
   getAngle: () => number
   now: () => number
   wakeLock: WakeLockManager
@@ -39,7 +39,7 @@ export interface CharadesDeviceControllerDependencies {
   unlockOrientation: () => void
   audio: AudioSynth
   vibrationNavigator: VibrationNavigatorLike
-  recognizer: OrientationRecognizer
+  recognizer: TiltRecognizer
   onOutcome: (outcome: CharadesOutcome) => boolean
   onStatus?: (status: CharadesDeviceStatus) => void
 }
@@ -61,14 +61,14 @@ export function createCharadesDeviceController(
   let status: CharadesDeviceStatus = { motion: 'off', wake: false, landscape: false }
   let started = false
   let hapticsEnabled = true
-  let orientationListening = false
+  let motionListening = false
 
   function updateStatus(next: Partial<CharadesDeviceStatus>) {
     status = { ...status, ...next }
     dependencies.onStatus?.(status)
   }
 
-  function publishRecognizerStatus(recognizerStatus: OrientationRecognizerStatus) {
+  function publishRecognizerStatus(recognizerStatus: TiltRecognizerStatus) {
     if (recognizerStatus === 'calibrating-neutral'
       || recognizerStatus === 'calibrating-correct'
       || recognizerStatus === 'returning-neutral') {
@@ -78,11 +78,15 @@ export function createCharadesDeviceController(
     if (recognizerStatus === 'failed') updateStatus({ motion: 'failed' })
   }
 
-  const onOrientation: EventListener = (event) => {
-    const orientation = event as Event & { beta?: number | null; gamma?: number | null }
+  const onMotion: EventListener = (event) => {
+    const motion = event as Event & {
+      accelerationIncludingGravity?: { x?: number | null; y?: number | null; z?: number | null } | null
+    }
+    const gravity = motion.accelerationIncludingGravity
     const result = dependencies.recognizer.update({
-      beta: orientation.beta ?? null,
-      gamma: orientation.gamma ?? null,
+      x: gravity?.x ?? null,
+      y: gravity?.y ?? null,
+      z: gravity?.z ?? null,
       angle: dependencies.getAngle(),
     }, dependencies.now())
     publishRecognizerStatus(result.status)
@@ -105,7 +109,7 @@ export function createCharadesDeviceController(
       if (started) return status
       started = true
       hapticsEnabled = options.hapticsEnabled
-      let permissionPromise: Promise<OrientationPermissionStatus>
+      let permissionPromise: Promise<SensorPermissionStatus>
       try {
         permissionPromise = options.motionEnabled
           ? dependencies.requestPermission()
@@ -129,8 +133,8 @@ export function createCharadesDeviceController(
       if (options.motionEnabled) {
         if (permission === 'granted') {
           dependencies.recognizer.startCalibration(dependencies.now())
-          dependencies.windowTarget.addEventListener('deviceorientation', onOrientation)
-          orientationListening = true
+          dependencies.windowTarget.addEventListener('devicemotion', onMotion)
+          motionListening = true
         } else {
           updateStatus({ motion: permission === 'denied' ? 'denied' : 'failed' })
         }
@@ -141,9 +145,9 @@ export function createCharadesDeviceController(
       dependencies.recognizer.beginGameplay()
     },
     async stop() {
-      if (orientationListening) {
-        dependencies.windowTarget.removeEventListener('deviceorientation', onOrientation)
-        orientationListening = false
+      if (motionListening) {
+        dependencies.windowTarget.removeEventListener('devicemotion', onMotion)
+        motionListening = false
       }
       if (started) dependencies.documentTarget.removeEventListener('visibilitychange', onVisibilityChange)
       started = false
@@ -180,11 +184,11 @@ function browserDependencies(
     (navigator as Navigator & { wakeLock?: WakeLockLike }).wakeLock,
     () => document.visibilityState === 'visible',
   )
-  const orientationConstructor = window.DeviceOrientationEvent as unknown as OrientationConstructorLike
+  const motionConstructor = window.DeviceMotionEvent as unknown as SensorConstructorLike
   return {
     windowTarget: window,
     documentTarget: document,
-    requestPermission: () => requestBrowserOrientation(orientationConstructor),
+    requestPermission: () => requestBrowserSensor(motionConstructor),
     getAngle: () => getOrientationAngle(orientation),
     now: () => performance.now(),
     wakeLock,
@@ -192,7 +196,7 @@ function browserDependencies(
     unlockOrientation: () => releaseOrientation(orientation),
     audio: createAudioSynth(),
     vibrationNavigator: navigator,
-    recognizer: createOrientationRecognizer(),
+    recognizer: createTiltRecognizer(),
     onOutcome,
     onStatus,
   }
