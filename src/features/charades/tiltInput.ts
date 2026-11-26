@@ -1,12 +1,13 @@
 import type { CharadesOutcome } from '../../domain/charades'
 
-export interface OrientationSample {
-  beta: number | null
-  gamma: number | null
+export interface GravitySample {
+  x: number | null
+  y: number | null
+  z: number | null
   angle: number
 }
 
-export type OrientationRecognizerStatus =
+export type TiltRecognizerStatus =
   | 'idle'
   | 'calibrating-neutral'
   | 'calibrating-correct'
@@ -15,7 +16,7 @@ export type OrientationRecognizerStatus =
   | 'latched'
   | 'failed'
 
-export interface OrientationRecognizerOptions {
+export interface TiltRecognizerOptions {
   calibrationMs?: number
   minimumSamples?: number
   maximumCalibrationSpread?: number
@@ -27,22 +28,60 @@ export interface OrientationRecognizerOptions {
   dwellMs?: number
 }
 
-export function normalizeForwardTilt(beta: number, gamma: number, angle: number): number {
-  const normalized = ((Math.round(angle / 90) * 90) % 360 + 360) % 360
-  if (normalized === 90) return -gamma
-  if (normalized === 180) return -beta
-  if (normalized === 270) return gamma
-  return beta
-}
-
-export interface OrientationRecognizer {
+export interface TiltRecognizer {
   startCalibration(startedAtMs: number): void
   beginGameplay(): void
-  update(sample: OrientationSample, nowMs: number): { action: CharadesOutcome | null; status: OrientationRecognizerStatus }
-  getStatus(): OrientationRecognizerStatus
+  update(sample: GravitySample, nowMs: number): { action: CharadesOutcome | null; status: TiltRecognizerStatus }
+  getStatus(): TiltRecognizerStatus
 }
 
-export function createOrientationRecognizer(options: OrientationRecognizerOptions = {}): OrientationRecognizer {
+interface Vector3 {
+  x: number
+  y: number
+  z: number
+}
+
+const dot = (left: Vector3, right: Vector3) => left.x * right.x + left.y * right.y + left.z * right.z
+const subtract = (left: Vector3, right: Vector3): Vector3 => ({
+  x: left.x - right.x,
+  y: left.y - right.y,
+  z: left.z - right.z,
+})
+const scale = (vector: Vector3, factor: number): Vector3 => ({
+  x: vector.x * factor,
+  y: vector.y * factor,
+  z: vector.z * factor,
+})
+
+function normalize(vector: Vector3): Vector3 | null {
+  const magnitude = Math.hypot(vector.x, vector.y, vector.z)
+  if (!Number.isFinite(magnitude) || magnitude <= Number.EPSILON) return null
+  return { x: vector.x / magnitude, y: vector.y / magnitude, z: vector.z / magnitude }
+}
+
+function normalizeSample(sample: GravitySample): Vector3 | null {
+  if (!Number.isFinite(sample.x) || !Number.isFinite(sample.y) || !Number.isFinite(sample.z)) return null
+  return normalize({ x: sample.x as number, y: sample.y as number, z: sample.z as number })
+}
+
+function angularDistance(left: Vector3, right: Vector3) {
+  return Math.acos(Math.min(1, Math.max(-1, dot(left, right)))) * 180 / Math.PI
+}
+
+function median(values: number[]) {
+  const ordered = [...values].sort((left, right) => left - right)
+  return ordered[Math.floor(ordered.length / 2)]
+}
+
+function medianVector(values: Vector3[]) {
+  return normalize({
+    x: median(values.map((value) => value.x)),
+    y: median(values.map((value) => value.y)),
+    z: median(values.map((value) => value.z)),
+  })
+}
+
+export function createTiltRecognizer(options: TiltRecognizerOptions = {}): TiltRecognizer {
   const calibrationMs = options.calibrationMs ?? 1_000
   const minimumSamples = options.minimumSamples ?? 8
   const maximumCalibrationSpread = options.maximumCalibrationSpread ?? 8
@@ -52,21 +91,17 @@ export function createOrientationRecognizer(options: OrientationRecognizerOption
   const neutralThreshold = options.neutralThreshold ?? 8
   const dwellMs = options.dwellMs ?? 100
 
-  let status: OrientationRecognizerStatus = 'idle'
+  let status: TiltRecognizerStatus = 'idle'
   let calibrationStartedAt = 0
   let calibrationAngle = 0
   let calibrationAngleKnown = false
   let recoveringFromRotation = false
   let gameplayStarted = false
-  let betaSamples: number[] = []
-  let gammaSamples: number[] = []
-  let neutralBeta = 0
-  let neutralGamma = 0
+  let neutralSamples: Vector3[] = []
+  let neutralVector: Vector3 = { x: 0, y: 0, z: 1 }
   let correctStartedAt: number | null = null
-  let correctBetaSamples: number[] = []
-  let correctGammaSamples: number[] = []
-  let correctAxisBeta = 0
-  let correctAxisGamma = 0
+  let correctSamples: Vector3[] = []
+  let correctAxis: Vector3 = { x: 0, y: 0, z: 1 }
   let learnedActionThreshold = options.actionThreshold ?? 25
   let returnNeutralSince: number | null = null
   let candidate: CharadesOutcome | null = null
@@ -76,39 +111,19 @@ export function createOrientationRecognizer(options: OrientationRecognizerOption
     return { action, status }
   }
 
-  function median(values: number[]) {
-    const ordered = [...values].sort((left, right) => left - right)
-    return ordered[Math.floor(ordered.length / 2)]
-  }
-
-  function spread(values: number[]) {
-    if (values.length === 0) return Number.POSITIVE_INFINITY
-    return Math.max(...values) - Math.min(...values)
-  }
-
   function beginNeutralCalibration(startedAtMs: number, angle?: number, recovering = false) {
     status = 'calibrating-neutral'
     calibrationStartedAt = startedAtMs
     calibrationAngle = angle ?? 0
     calibrationAngleKnown = angle !== undefined
     recoveringFromRotation = recovering
-    betaSamples = []
-    gammaSamples = []
-    neutralBeta = 0
-    neutralGamma = 0
+    neutralSamples = []
     correctStartedAt = null
-    correctBetaSamples = []
-    correctGammaSamples = []
-    correctAxisBeta = 0
-    correctAxisGamma = 0
+    correctSamples = []
     learnedActionThreshold = options.actionThreshold ?? 25
     returnNeutralSince = null
     candidate = null
     candidateSince = 0
-  }
-
-  function distanceFromNeutral(beta: number, gamma: number) {
-    return Math.hypot(beta - neutralBeta, gamma - neutralGamma)
   }
 
   return {
@@ -133,85 +148,76 @@ export function createOrientationRecognizer(options: OrientationRecognizerOption
         }
         beginNeutralCalibration(nowMs, normalizedAngle, true)
       }
-      if (!Number.isFinite(sample.beta) || !Number.isFinite(sample.gamma)) return result()
-      const beta = sample.beta as number
-      const gamma = sample.gamma as number
+
+      const vector = normalizeSample(sample)
+      if (!vector) return result()
 
       if (status === 'calibrating-neutral') {
-        betaSamples.push(beta)
-        gammaSamples.push(gamma)
+        neutralSamples.push(vector)
         if (nowMs - calibrationStartedAt < calibrationMs) return result()
-        const stable = betaSamples.length >= minimumSamples
-          && gammaSamples.length >= minimumSamples
-          && spread(betaSamples) <= maximumCalibrationSpread
-          && spread(gammaSamples) <= maximumCalibrationSpread
+        const baseline = medianVector(neutralSamples)
+        const stable = baseline !== null
+          && neutralSamples.length >= minimumSamples
+          && neutralSamples.every((value) => angularDistance(value, baseline) <= maximumCalibrationSpread)
         if (!stable) {
           if (recoveringFromRotation) {
             beginNeutralCalibration(nowMs, normalizedAngle, true)
-            betaSamples.push(beta)
-            gammaSamples.push(gamma)
+            neutralSamples.push(vector)
             return result()
           }
           status = 'failed'
           return result()
         }
-        neutralBeta = median(betaSamples)
-        neutralGamma = median(gammaSamples)
+        neutralVector = baseline
         status = 'calibrating-correct'
         correctStartedAt = null
-        correctBetaSamples = []
-        correctGammaSamples = []
+        correctSamples = []
         return result()
       }
 
       if (status === 'calibrating-correct') {
-        const deltaBeta = beta - neutralBeta
-        const deltaGamma = gamma - neutralGamma
-        const gestureMagnitude = Math.hypot(deltaBeta, deltaGamma)
+        const displacement = subtract(vector, neutralVector)
+        const gestureMagnitude = angularDistance(vector, neutralVector)
         if (gestureMagnitude < minimumGestureMagnitude) {
           correctStartedAt = null
-          correctBetaSamples = []
-          correctGammaSamples = []
+          correctSamples = []
           return result()
         }
-        if (correctBetaSamples.length > 0) {
-          const referenceBeta = correctBetaSamples[0]
-          const referenceGamma = correctGammaSamples[0]
-          const referenceMagnitude = Math.hypot(referenceBeta, referenceGamma)
-          const alignment = (deltaBeta * referenceBeta + deltaGamma * referenceGamma)
-            / (gestureMagnitude * referenceMagnitude)
+        if (correctSamples.length > 0) {
+          const reference = subtract(correctSamples[0], neutralVector)
+          const alignment = dot(displacement, reference)
+            / (Math.hypot(displacement.x, displacement.y, displacement.z) * Math.hypot(reference.x, reference.y, reference.z))
           if (alignment < 0.8) {
             correctStartedAt = nowMs
-            correctBetaSamples = [deltaBeta]
-            correctGammaSamples = [deltaGamma]
+            correctSamples = [vector]
             return result()
           }
         }
         if (correctStartedAt === null) correctStartedAt = nowMs
-        correctBetaSamples.push(deltaBeta)
-        correctGammaSamples.push(deltaGamma)
-        if (nowMs - correctStartedAt < gestureCalibrationMs || correctBetaSamples.length < minimumGestureSamples) return result()
+        correctSamples.push(vector)
+        if (nowMs - correctStartedAt < gestureCalibrationMs || correctSamples.length < minimumGestureSamples) return result()
 
-        const learnedBeta = median(correctBetaSamples)
-        const learnedGamma = median(correctGammaSamples)
-        const learnedMagnitude = Math.hypot(learnedBeta, learnedGamma)
-        if (learnedMagnitude < minimumGestureMagnitude) {
+        const correctVector = medianVector(correctSamples)
+        if (!correctVector) return result()
+        const learnedMagnitude = angularDistance(correctVector, neutralVector)
+        const axis = normalize(subtract(correctVector, scale(neutralVector, dot(correctVector, neutralVector))))
+        if (!axis || learnedMagnitude < minimumGestureMagnitude) {
           correctStartedAt = null
-          correctBetaSamples = []
-          correctGammaSamples = []
+          correctSamples = []
           return result()
         }
-        correctAxisBeta = learnedBeta / learnedMagnitude
-        correctAxisGamma = learnedGamma / learnedMagnitude
-        learnedActionThreshold = options.actionThreshold
+        correctAxis = axis
+        const learnedThresholdDegrees = options.actionThreshold
           ?? Math.min(30, Math.max(neutralThreshold + 4, learnedMagnitude * 0.5))
+        learnedActionThreshold = learnedThresholdDegrees
         status = 'returning-neutral'
         returnNeutralSince = null
         return result()
       }
 
+      const distance = angularDistance(vector, neutralVector)
       if (status === 'returning-neutral') {
-        if (distanceFromNeutral(beta, gamma) <= neutralThreshold) {
+        if (distance <= neutralThreshold) {
           if (returnNeutralSince === null) returnNeutralSince = nowMs
           if (nowMs - returnNeutralSince >= dwellMs) status = 'armed'
         } else {
@@ -220,7 +226,6 @@ export function createOrientationRecognizer(options: OrientationRecognizerOption
         return result()
       }
 
-      const distance = distanceFromNeutral(beta, gamma)
       if (distance <= neutralThreshold) {
         candidate = null
         if (status === 'latched') status = 'armed'
@@ -228,7 +233,7 @@ export function createOrientationRecognizer(options: OrientationRecognizerOption
       }
       if (status === 'latched') return result()
 
-      const projection = (beta - neutralBeta) * correctAxisBeta + (gamma - neutralGamma) * correctAxisGamma
+      const projection = Math.atan2(dot(vector, correctAxis), dot(vector, neutralVector)) * 180 / Math.PI
       const nextCandidate = projection >= learnedActionThreshold ? 'correct' : projection <= -learnedActionThreshold ? 'pass' : null
       if (!nextCandidate) {
         candidate = null

@@ -40,6 +40,7 @@ export default function CharadesSetupScreen({ onBack, onManagePacks, preferredPa
   const [selectedPackId, setSelectedPackId] = useState(preferredPackId ?? initialSettings?.packId ?? builtInPacks[0].id)
   const [selectedCategories, setSelectedCategories] = useState<CharadesCategory[]>(initialSettings?.categories ?? [])
   const [selectedVibes, setSelectedVibes] = useState<CharadesVibe[]>(initialSettings?.vibes ?? [])
+  const [motionEnabled, setMotionEnabled] = useState(initialSettings?.motionEnabled ?? true)
   const [henyoTapAnswersEnabled, setHenyoTapAnswersEnabled] = useState(initialSettings?.henyoTapAnswersEnabled ?? true)
   const [noRepeatEnabled, setNoRepeatEnabled] = useState(initialSettings?.noRepeatEnabled ?? true)
   const [relayRounds, setRelayRounds] = useState<3 | 4 | 5>(initialSettings?.relayRounds ?? 3)
@@ -97,7 +98,7 @@ export default function CharadesSetupScreen({ onBack, onManagePacks, preferredPa
       durationSeconds: duration,
       categories: selectedCategories,
       vibes: selectedVibes,
-      motionEnabled: false,
+      motionEnabled,
       henyoTapAnswersEnabled: mode === 'henyo' && henyoTapAnswersEnabled,
       noRepeatEnabled,
       players,
@@ -172,7 +173,7 @@ export default function CharadesSetupScreen({ onBack, onManagePacks, preferredPa
       {mode === 'henyo' ? <p className="fixed-duration">2:00 fixed</p> : <label>Turn duration<select aria-label="Turn duration" value={duration} onChange={(event) => setDuration(Number(event.target.value) as 60 | 75 | 90)}><option value="60">60 seconds</option><option value="75">75 seconds</option><option value="90">90 seconds</option></select></label>}
       <div className="rule-groups">
         <fieldset className="rule-group"><legend>Device</legend>
-          <label className="switch-row"><span><strong>Tilt controls — Work in progress</strong><small>Use tap controls for now</small></span><input type="checkbox" checked={false} disabled /></label>
+          <label className="switch-row"><span><strong>Tilt controls</strong><small>Tap controls always remain available</small></span><input aria-label="Tilt controls" type="checkbox" checked={motionEnabled} onChange={(event) => setMotionEnabled(event.target.checked)} /></label>
           <label className="switch-row"><span><strong>Sound</strong><small>Generated in the browser</small></span><input type="checkbox" checked={soundEnabled} onChange={(event) => setSoundEnabled(event.target.checked)} /></label>
           <label className="switch-row"><span><strong>Haptics</strong><small>When supported</small></span><input type="checkbox" checked={hapticsEnabled} onChange={(event) => setHapticsEnabled(event.target.checked)} /></label>
           <label className="switch-row"><span><strong>No repeat words</strong><small>Remember used cards on this device</small></span><input type="checkbox" checked={noRepeatEnabled} onChange={(event) => setNoRepeatEnabled(event.target.checked)} /></label>

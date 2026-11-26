@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import type { CharadesOutcome } from '../../domain/charades'
 import { createAudioSynth, type AudioCue, type AudioSynth } from './audioSynth'
 import { vibrateForOutcome, type VibrationNavigatorLike } from './haptics'
-import { createOrientationRecognizer, type OrientationRecognizer, type OrientationRecognizerStatus } from './orientationInput'
 import { getOrientationAngle, lockLandscape as requestLandscape, unlockOrientation as releaseOrientation } from './orientationLock'
-import { requestOrientationPermission as requestBrowserOrientation, type OrientationConstructorLike, type OrientationPermissionStatus } from './orientationPermission'
+import { requestSensorPermission as requestBrowserSensor, type SensorConstructorLike, type SensorPermissionStatus } from './sensorPermission'
+import { createTiltRecognizer, type TiltRecognizer, type TiltRecognizerStatus } from './tiltInput'
 import { createWakeLockManager, type WakeLockManager, type WakeLockLike } from './wakeLock'
 
 interface EventTargetLike {
@@ -31,7 +31,7 @@ export interface CharadesDeviceStartOptions {
 export interface CharadesDeviceControllerDependencies {
   windowTarget: EventTargetLike
   documentTarget: VisibilityTargetLike
-  requestPermission: () => Promise<OrientationPermissionStatus>
+  requestPermission: () => Promise<SensorPermissionStatus>
   getAngle: () => number
   now: () => number
   wakeLock: WakeLockManager
@@ -39,7 +39,7 @@ export interface CharadesDeviceControllerDependencies {
   unlockOrientation: () => void
   audio: AudioSynth
   vibrationNavigator: VibrationNavigatorLike
-  recognizer: OrientationRecognizer
+  recognizer: TiltRecognizer
   onOutcome: (outcome: CharadesOutcome) => boolean
   onStatus?: (status: CharadesDeviceStatus) => void
 }
@@ -47,6 +47,7 @@ export interface CharadesDeviceControllerDependencies {
 export interface CharadesDeviceController {
   start(options: CharadesDeviceStartOptions): Promise<CharadesDeviceStatus>
   beginGameplay(): void
+  disableMotion(): void
   stop(): Promise<void>
   getStatus(): CharadesDeviceStatus
   playOutcome(outcome: CharadesOutcome): void
@@ -61,14 +62,21 @@ export function createCharadesDeviceController(
   let status: CharadesDeviceStatus = { motion: 'off', wake: false, landscape: false }
   let started = false
   let hapticsEnabled = true
-  let orientationListening = false
+  let motionListening = false
+  let visibilityListening = false
+  let lifecycle = 0
+  let pendingStart: Promise<CharadesDeviceStatus> | null = null
 
   function updateStatus(next: Partial<CharadesDeviceStatus>) {
-    status = { ...status, ...next }
+    const nextStatus = { ...status, ...next }
+    if (nextStatus.motion === status.motion
+      && nextStatus.wake === status.wake
+      && nextStatus.landscape === status.landscape) return
+    status = nextStatus
     dependencies.onStatus?.(status)
   }
 
-  function publishRecognizerStatus(recognizerStatus: OrientationRecognizerStatus) {
+  function publishRecognizerStatus(recognizerStatus: TiltRecognizerStatus) {
     if (recognizerStatus === 'calibrating-neutral'
       || recognizerStatus === 'calibrating-correct'
       || recognizerStatus === 'returning-neutral') {
@@ -78,11 +86,15 @@ export function createCharadesDeviceController(
     if (recognizerStatus === 'failed') updateStatus({ motion: 'failed' })
   }
 
-  const onOrientation: EventListener = (event) => {
-    const orientation = event as Event & { beta?: number | null; gamma?: number | null }
+  const onMotion: EventListener = (event) => {
+    const motion = event as Event & {
+      accelerationIncludingGravity?: { x?: number | null; y?: number | null; z?: number | null } | null
+    }
+    const gravity = motion.accelerationIncludingGravity
     const result = dependencies.recognizer.update({
-      beta: orientation.beta ?? null,
-      gamma: orientation.gamma ?? null,
+      x: gravity?.x ?? null,
+      y: gravity?.y ?? null,
+      z: gravity?.z ?? null,
       angle: dependencies.getAngle(),
     }, dependencies.now())
     publishRecognizerStatus(result.status)
@@ -101,11 +113,12 @@ export function createCharadesDeviceController(
   }
 
   return {
-    async start(options) {
-      if (started) return status
+    start(options) {
+      if (started) return Promise.resolve(status)
       started = true
+      const run = ++lifecycle
       hapticsEnabled = options.hapticsEnabled
-      let permissionPromise: Promise<OrientationPermissionStatus>
+      let permissionPromise: Promise<SensorPermissionStatus>
       try {
         permissionPromise = options.motionEnabled
           ? dependencies.requestPermission()
@@ -117,36 +130,66 @@ export function createCharadesDeviceController(
       const audioPromise = options.soundEnabled ? dependencies.audio.unlock() : Promise.resolve(false)
       const wakePromise = dependencies.wakeLock.acquire()
       const landscapePromise = dependencies.lockLandscape()
-      const [permission, , wake, landscape] = await Promise.all([
+      const starting = Promise.all([
         permissionPromise,
         audioPromise,
         wakePromise,
         landscapePromise,
-      ])
-      updateStatus({ wake, landscape, motion: options.motionEnabled ? 'calibrating-neutral' : 'off' })
-      dependencies.documentTarget.addEventListener('visibilitychange', onVisibilityChange)
+      ]).then(([permission, , wake, landscape]) => {
+        if (run !== lifecycle || !started) return status
+        updateStatus({ wake, landscape, motion: options.motionEnabled ? 'calibrating-neutral' : 'off' })
+        dependencies.documentTarget.addEventListener('visibilitychange', onVisibilityChange)
+        visibilityListening = true
 
-      if (options.motionEnabled) {
-        if (permission === 'granted') {
-          dependencies.recognizer.startCalibration(dependencies.now())
-          dependencies.windowTarget.addEventListener('deviceorientation', onOrientation)
-          orientationListening = true
-        } else {
-          updateStatus({ motion: permission === 'denied' ? 'denied' : 'failed' })
+        if (options.motionEnabled) {
+          if (permission === 'granted') {
+            dependencies.recognizer.startCalibration(dependencies.now())
+            dependencies.windowTarget.addEventListener('devicemotion', onMotion)
+            motionListening = true
+          } else {
+            updateStatus({ motion: permission === 'denied' ? 'denied' : 'failed' })
+          }
         }
+        return status
+      })
+      pendingStart = starting
+      const clearPending = () => {
+        if (pendingStart === starting) pendingStart = null
       }
-      return status
+      void starting.then(clearPending, clearPending)
+      return starting
     },
     beginGameplay() {
       dependencies.recognizer.beginGameplay()
     },
-    async stop() {
-      if (orientationListening) {
-        dependencies.windowTarget.removeEventListener('deviceorientation', onOrientation)
-        orientationListening = false
+    disableMotion() {
+      if (motionListening) {
+        dependencies.windowTarget.removeEventListener('devicemotion', onMotion)
+        motionListening = false
       }
-      if (started) dependencies.documentTarget.removeEventListener('visibilitychange', onVisibilityChange)
+      updateStatus({ motion: 'off' })
+    },
+    async stop() {
+      const stopRun = ++lifecycle
       started = false
+      if (motionListening) {
+        dependencies.windowTarget.removeEventListener('devicemotion', onMotion)
+        motionListening = false
+      }
+      if (visibilityListening) {
+        dependencies.documentTarget.removeEventListener('visibilitychange', onVisibilityChange)
+        visibilityListening = false
+      }
+      updateStatus({ motion: 'off' })
+      const startAtStop = pendingStart
+      if (startAtStop) {
+        try {
+          await startAtStop
+        } catch {
+          // Cleanup still owns resources acquired by a failed start.
+        }
+      }
+      if (lifecycle !== stopRun || started) return
       await dependencies.wakeLock.release()
       dependencies.unlockOrientation()
       await dependencies.audio.dispose()
@@ -180,11 +223,11 @@ function browserDependencies(
     (navigator as Navigator & { wakeLock?: WakeLockLike }).wakeLock,
     () => document.visibilityState === 'visible',
   )
-  const orientationConstructor = window.DeviceOrientationEvent as unknown as OrientationConstructorLike
+  const motionConstructor = window.DeviceMotionEvent as unknown as SensorConstructorLike
   return {
     windowTarget: window,
     documentTarget: document,
-    requestPermission: () => requestBrowserOrientation(orientationConstructor),
+    requestPermission: () => requestBrowserSensor(motionConstructor),
     getAngle: () => getOrientationAngle(orientation),
     now: () => performance.now(),
     wakeLock,
@@ -192,7 +235,7 @@ function browserDependencies(
     unlockOrientation: () => releaseOrientation(orientation),
     audio: createAudioSynth(),
     vibrationNavigator: navigator,
-    recognizer: createOrientationRecognizer(),
+    recognizer: createTiltRecognizer(),
     onOutcome,
     onStatus,
   }

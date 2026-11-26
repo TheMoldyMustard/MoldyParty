@@ -1,20 +1,24 @@
 import { describe, expect, it, vi } from 'vitest'
 import { vibrateForOutcome } from './haptics'
 import { getOrientationAngle, lockLandscape, unlockOrientation } from './orientationLock'
-import { requestOrientationPermission } from './orientationPermission'
+import { requestSensorPermission } from './sensorPermission'
 import { createWakeLockManager } from './wakeLock'
 
-describe('orientation permission', () => {
+describe('motion sensor permission', () => {
   it('returns granted for browsers without an explicit permission method', async () => {
-    expect(await requestOrientationPermission(function DeviceOrientationEvent() {})).toBe('granted')
+    expect(await requestSensorPermission(function DeviceMotionEvent() {})).toBe('granted')
   })
 
   it('reports an explicit denial without throwing', async () => {
-    const constructor = Object.assign(function DeviceOrientationEvent() {}, {
+    const constructor = Object.assign(function DeviceMotionEvent() {}, {
       requestPermission: vi.fn().mockResolvedValue('denied'),
     })
 
-    expect(await requestOrientationPermission(constructor)).toBe('denied')
+    expect(await requestSensorPermission(constructor)).toBe('denied')
+  })
+
+  it('reports an unavailable sensor constructor', async () => {
+    expect(await requestSensorPermission(undefined)).toBe('unavailable')
   })
 })
 
