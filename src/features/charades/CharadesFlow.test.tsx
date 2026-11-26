@@ -56,16 +56,28 @@ describe('Forehead Charades interface', () => {
     expect(screen.getByRole('checkbox', { name: 'Pop Culture / Local' })).toBeInTheDocument()
   })
 
-  it('marks tilt controls as work in progress and prevents motion-enabled sessions', async () => {
+  it('enables tilt by default for new sessions', async () => {
     const user = userEvent.setup()
     render(<App />)
 
     await openNewSession(user)
-    const tiltControls = screen.getByRole('checkbox', { name: /Tilt controls — Work in progress/i })
-    expect(tiltControls).toBeDisabled()
-    expect(tiltControls).not.toBeChecked()
+    const tiltControls = screen.getByRole('checkbox', { name: 'Tilt controls' })
+    expect(tiltControls).toBeEnabled()
+    expect(tiltControls).toBeChecked()
 
-    fireEvent.click(tiltControls)
+    await user.click(screen.getByRole('button', { name: 'Start game' }))
+
+    expect(charadesStore.getState().session?.settings.motionEnabled).toBe(true)
+  })
+
+  it('persists an explicit tilt opt-out for tap-only play', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await openNewSession(user)
+    const tiltControls = screen.getByRole('checkbox', { name: 'Tilt controls' })
+
+    await user.click(tiltControls)
     expect(tiltControls).not.toBeChecked()
     await user.click(screen.getByRole('button', { name: 'Start game' }))
 

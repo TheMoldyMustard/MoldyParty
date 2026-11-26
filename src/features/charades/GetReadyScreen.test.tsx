@@ -72,14 +72,18 @@ describe('Get Ready tilt calibration', () => {
     expect(screen.queryByText('3')).not.toBeInTheDocument()
   })
 
-  it('keeps motion services disabled for a recovered motion-enabled session', async () => {
+  it.each([true, false])('forwards a recovered session motion preference of %s', async (motionEnabled) => {
+    const recovered = createCharadesSession({ ...settings, motionEnabled }, [
+      { word: 'Adobo', category: 'food' }, { word: 'Balut', category: 'food' },
+    ], () => 0.99)
+    charadesStore.setState({ session: recovered })
     const session = charadesStore.getState().session!
     const devices = controller({ motion: 'off', wake: false, landscape: false })
     render(<GetReadyScreen session={session} devices={devices} deviceStatus={{ motion: 'off', wake: false, landscape: false }} onExit={vi.fn()} />)
 
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Start Get Ready' })); await Promise.resolve() })
 
-    expect(devices.start).toHaveBeenCalledWith(expect.objectContaining({ motionEnabled: false }))
+    expect(devices.start).toHaveBeenCalledWith(expect.objectContaining({ motionEnabled }))
   })
 
   it('cancels the countdown and restarts it only after rotation recalibration re-arms', async () => {
