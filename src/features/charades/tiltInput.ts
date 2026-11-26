@@ -41,13 +41,16 @@ interface Vector3 {
   z: number
 }
 
-const degreesToRadians = (degrees: number) => degrees * Math.PI / 180
-const degreesToChord = (degrees: number) => 2 * Math.sin(degreesToRadians(degrees) / 2)
 const dot = (left: Vector3, right: Vector3) => left.x * right.x + left.y * right.y + left.z * right.z
 const subtract = (left: Vector3, right: Vector3): Vector3 => ({
   x: left.x - right.x,
   y: left.y - right.y,
   z: left.z - right.z,
+})
+const scale = (vector: Vector3, factor: number): Vector3 => ({
+  x: vector.x * factor,
+  y: vector.y * factor,
+  z: vector.z * factor,
 })
 
 function normalize(vector: Vector3): Vector3 | null {
@@ -99,7 +102,7 @@ export function createTiltRecognizer(options: TiltRecognizerOptions = {}): TiltR
   let correctStartedAt: number | null = null
   let correctSamples: Vector3[] = []
   let correctAxis: Vector3 = { x: 0, y: 0, z: 1 }
-  let learnedActionThreshold = degreesToChord(options.actionThreshold ?? 25)
+  let learnedActionThreshold = options.actionThreshold ?? 25
   let returnNeutralSince: number | null = null
   let candidate: CharadesOutcome | null = null
   let candidateSince = 0
@@ -117,7 +120,7 @@ export function createTiltRecognizer(options: TiltRecognizerOptions = {}): TiltR
     neutralSamples = []
     correctStartedAt = null
     correctSamples = []
-    learnedActionThreshold = degreesToChord(options.actionThreshold ?? 25)
+    learnedActionThreshold = options.actionThreshold ?? 25
     returnNeutralSince = null
     candidate = null
     candidateSince = 0
@@ -197,7 +200,7 @@ export function createTiltRecognizer(options: TiltRecognizerOptions = {}): TiltR
         const correctVector = medianVector(correctSamples)
         if (!correctVector) return result()
         const learnedMagnitude = angularDistance(correctVector, neutralVector)
-        const axis = normalize(subtract(correctVector, neutralVector))
+        const axis = normalize(subtract(correctVector, scale(neutralVector, dot(correctVector, neutralVector))))
         if (!axis || learnedMagnitude < minimumGestureMagnitude) {
           correctStartedAt = null
           correctSamples = []
@@ -206,7 +209,7 @@ export function createTiltRecognizer(options: TiltRecognizerOptions = {}): TiltR
         correctAxis = axis
         const learnedThresholdDegrees = options.actionThreshold
           ?? Math.min(30, Math.max(neutralThreshold + 4, learnedMagnitude * 0.5))
-        learnedActionThreshold = degreesToChord(learnedThresholdDegrees)
+        learnedActionThreshold = learnedThresholdDegrees
         status = 'returning-neutral'
         returnNeutralSince = null
         return result()
@@ -230,7 +233,7 @@ export function createTiltRecognizer(options: TiltRecognizerOptions = {}): TiltR
       }
       if (status === 'latched') return result()
 
-      const projection = dot(subtract(vector, neutralVector), correctAxis)
+      const projection = Math.atan2(dot(vector, correctAxis), dot(vector, neutralVector)) * 180 / Math.PI
       const nextCandidate = projection >= learnedActionThreshold ? 'correct' : projection <= -learnedActionThreshold ? 'pass' : null
       if (!nextCandidate) {
         candidate = null

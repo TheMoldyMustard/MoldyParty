@@ -46,6 +46,32 @@ describe('gravity tilt recognizer', () => {
     expect(update(recognizer, PASS, 1_930).action).toBe('pass')
   })
 
+  it.each([90, 270])('keeps Pass reachable after a full face-up demonstration at %s° landscape', (angle) => {
+    const neutral = { x: 9.8, y: 0, z: 0, angle }
+    const faceUp = { x: 0, y: 0, z: 9.8, angle }
+    const faceDown = { x: 0, y: 0, z: -9.8, angle }
+    const recognizer = createTiltRecognizer({
+      minimumSamples: 5,
+      gestureCalibrationMs: 200,
+      minimumGestureSamples: 3,
+      dwellMs: 80,
+    })
+
+    completeNeutral(recognizer, neutral)
+    update(recognizer, faceUp, 1_100)
+    update(recognizer, faceUp, 1_200)
+    update(recognizer, faceUp, 1_350)
+    update(recognizer, neutral, 1_400)
+    update(recognizer, neutral, 1_500)
+    recognizer.beginGameplay()
+
+    expect(update(recognizer, faceUp, 1_600).action).toBeNull()
+    expect(update(recognizer, faceUp, 1_680).action).toBe('correct')
+    update(recognizer, neutral, 1_760)
+    expect(update(recognizer, faceDown, 1_850).action).toBeNull()
+    expect(update(recognizer, faceDown, 1_930).action).toBe('pass')
+  })
+
   it('keeps landscape-vertical neutral stable where equivalent Euler angles wrapped', () => {
     const recognizer = createTiltRecognizer({ minimumSamples: 5, maximumCalibrationSpread: 5 })
     recognizer.startCalibration(0)

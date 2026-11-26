@@ -162,4 +162,54 @@ describe('Charades device controller', () => {
     windowTarget.dispatch('devicemotion', motion(8.487, 0, 4.9))
     expect(onOutcome).not.toHaveBeenCalled()
   })
+
+  it('does not install listeners when stop interrupts a pending start', async () => {
+    let resolvePermission!: (permission: 'granted') => void
+    const permission = new Promise<'granted'>((resolve) => { resolvePermission = resolve })
+    const windowTarget = fakeTarget()
+    const documentTarget = { ...fakeTarget(), visibilityState: 'visible' as const }
+    const wakeLock = { acquire: vi.fn().mockResolvedValue(true), release: vi.fn(), isHeld: vi.fn() }
+    const unlockOrientation = vi.fn()
+    const controller = createCharadesDeviceController(dependencies({
+      windowTarget,
+      documentTarget,
+      requestPermission: vi.fn(() => permission),
+      wakeLock,
+      lockLandscape: vi.fn().mockResolvedValue(true),
+      unlockOrientation,
+    }))
+
+    const starting = controller.start({ motionEnabled: true, soundEnabled: false, hapticsEnabled: false })
+    const stopping = controller.stop()
+    resolvePermission('granted')
+    await Promise.all([starting, stopping])
+
+    expect(windowTarget.addEventListener).not.toHaveBeenCalledWith('devicemotion', expect.any(Function))
+    expect(documentTarget.addEventListener).not.toHaveBeenCalledWith('visibilitychange', expect.any(Function))
+    expect(wakeLock.release).toHaveBeenCalled()
+    expect(unlockOrientation).toHaveBeenCalled()
+    expect(controller.getStatus().motion).toBe('off')
+  })
+
+  it('keeps a rapid restart active after an older pending start is stopped', async () => {
+    let resolveFirstPermission!: (permission: 'granted') => void
+    const firstPermission = new Promise<'granted'>((resolve) => { resolveFirstPermission = resolve })
+    const requestPermission = vi.fn()
+      .mockImplementationOnce(() => firstPermission)
+      .mockResolvedValueOnce('granted')
+    const windowTarget = fakeTarget()
+    const controller = createCharadesDeviceController(dependencies({ windowTarget, requestPermission }))
+
+    const firstStart = controller.start({ motionEnabled: true, soundEnabled: false, hapticsEnabled: false })
+    const stopping = controller.stop()
+    const secondStart = controller.start({ motionEnabled: true, soundEnabled: false, hapticsEnabled: false })
+    await secondStart
+    resolveFirstPermission('granted')
+    await Promise.all([firstStart, stopping])
+
+    expect(requestPermission).toHaveBeenCalledTimes(2)
+    expect(windowTarget.addEventListener).toHaveBeenCalledTimes(1)
+    expect(windowTarget.addEventListener).toHaveBeenCalledWith('devicemotion', expect.any(Function))
+    expect(controller.getStatus().motion).toBe('calibrating-neutral')
+  })
 })

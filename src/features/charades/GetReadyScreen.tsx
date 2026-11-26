@@ -15,15 +15,16 @@ interface GetReadyScreenProps {
 export default function GetReadyScreen({ session, devices, deviceStatus, onExit }: GetReadyScreenProps) {
   const [countdown, setCountdown] = useState<number | null>(null)
   const [started, setStarted] = useState(false)
+  const [usingTapFallback, setUsingTapFallback] = useState(false)
   const holder = getCurrentHolder(session)
   const soundEnabled = usePreferencesStore((state) => state.soundEnabled)
   const hapticsEnabled = usePreferencesStore((state) => state.hapticsEnabled)
 
   useEffect(() => {
     if (countdown === null) return
-    if (deviceStatus.motion === 'calibrating-neutral'
+    if (!usingTapFallback && (deviceStatus.motion === 'calibrating-neutral'
       || deviceStatus.motion === 'calibrating-correct'
-      || deviceStatus.motion === 'returning-neutral') {
+      || deviceStatus.motion === 'returning-neutral')) {
       const timeout = window.setTimeout(() => setCountdown(null), 0)
       return () => window.clearTimeout(timeout)
     }
@@ -34,7 +35,7 @@ export default function GetReadyScreen({ session, devices, deviceStatus, onExit 
     }
     const timeout = window.setTimeout(() => setCountdown((value) => value === null ? null : value - 1), 1_000)
     return () => window.clearTimeout(timeout)
-  }, [countdown, deviceStatus.motion, devices])
+  }, [countdown, deviceStatus.motion, devices, usingTapFallback])
 
   useEffect(() => {
     if (!started || countdown !== null) return
@@ -61,6 +62,12 @@ export default function GetReadyScreen({ session, devices, deviceStatus, onExit 
     }
   }
 
+  function continueWithTaps() {
+    devices.disableMotion()
+    setUsingTapFallback(true)
+    setCountdown(3)
+  }
+
   const calibrationInstruction = deviceStatus.motion === 'calibrating-neutral'
     ? 'Hold the phone neutral on your forehead'
     : deviceStatus.motion === 'calibrating-correct'
@@ -75,7 +82,7 @@ export default function GetReadyScreen({ session, devices, deviceStatus, onExit 
     <h1>Get ready, {holder.memberName}</h1>
     {session.settings.mode === 'one-word' && <p>Each clue-giver may say exactly one word per card.</p>}
     {session.settings.mode === 'henyo' && <p>Ask questions. Clue-givers answer only Oo, Hindi, or Pwede.</p>}
-    {!started ? <button className="button button--hero" type="button" onClick={() => void start()}>Start Get Ready</button> : countdown === null ? <div className="ready-countdown" role="status" aria-live="polite"><span>{calibrationInstruction}</span></div> : <div className="ready-countdown" aria-live="polite"><strong>{countdown || 'Go!'}</strong><span>Hold the phone landscape on your forehead</span></div>}
+    {!started ? <button className="button button--hero" type="button" onClick={() => void start()}>Start Get Ready</button> : countdown === null ? <><div className="ready-countdown" role="status" aria-live="polite"><span>{calibrationInstruction}</span></div><button className="button button--secondary" type="button" onClick={continueWithTaps}>Continue with taps</button></> : <div className="ready-countdown" aria-live="polite"><strong>{countdown || 'Go!'}</strong><span>Hold the phone landscape on your forehead</span></div>}
     {deviceStatus.motion === 'denied' || deviceStatus.motion === 'failed' ? <p role="status">Motion unavailable — use the left and right tap controls.</p> : null}
     {!deviceStatus.landscape && started && <p className="rotate-prompt">Rotate to landscape for the clearest view. Portrait still works.</p>}
   </main>

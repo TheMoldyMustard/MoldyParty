@@ -47,6 +47,7 @@ export interface CharadesDeviceControllerDependencies {
 export interface CharadesDeviceController {
   start(options: CharadesDeviceStartOptions): Promise<CharadesDeviceStatus>
   beginGameplay(): void
+  disableMotion(): void
   stop(): Promise<void>
   getStatus(): CharadesDeviceStatus
   playOutcome(outcome: CharadesOutcome): void
@@ -62,9 +63,16 @@ export function createCharadesDeviceController(
   let started = false
   let hapticsEnabled = true
   let motionListening = false
+  let visibilityListening = false
+  let lifecycle = 0
+  let pendingStart: Promise<CharadesDeviceStatus> | null = null
 
   function updateStatus(next: Partial<CharadesDeviceStatus>) {
-    status = { ...status, ...next }
+    const nextStatus = { ...status, ...next }
+    if (nextStatus.motion === status.motion
+      && nextStatus.wake === status.wake
+      && nextStatus.landscape === status.landscape) return
+    status = nextStatus
     dependencies.onStatus?.(status)
   }
 
@@ -105,9 +113,10 @@ export function createCharadesDeviceController(
   }
 
   return {
-    async start(options) {
-      if (started) return status
+    start(options) {
+      if (started) return Promise.resolve(status)
       started = true
+      const run = ++lifecycle
       hapticsEnabled = options.hapticsEnabled
       let permissionPromise: Promise<SensorPermissionStatus>
       try {
@@ -121,36 +130,66 @@ export function createCharadesDeviceController(
       const audioPromise = options.soundEnabled ? dependencies.audio.unlock() : Promise.resolve(false)
       const wakePromise = dependencies.wakeLock.acquire()
       const landscapePromise = dependencies.lockLandscape()
-      const [permission, , wake, landscape] = await Promise.all([
+      const starting = Promise.all([
         permissionPromise,
         audioPromise,
         wakePromise,
         landscapePromise,
-      ])
-      updateStatus({ wake, landscape, motion: options.motionEnabled ? 'calibrating-neutral' : 'off' })
-      dependencies.documentTarget.addEventListener('visibilitychange', onVisibilityChange)
+      ]).then(([permission, , wake, landscape]) => {
+        if (run !== lifecycle || !started) return status
+        updateStatus({ wake, landscape, motion: options.motionEnabled ? 'calibrating-neutral' : 'off' })
+        dependencies.documentTarget.addEventListener('visibilitychange', onVisibilityChange)
+        visibilityListening = true
 
-      if (options.motionEnabled) {
-        if (permission === 'granted') {
-          dependencies.recognizer.startCalibration(dependencies.now())
-          dependencies.windowTarget.addEventListener('devicemotion', onMotion)
-          motionListening = true
-        } else {
-          updateStatus({ motion: permission === 'denied' ? 'denied' : 'failed' })
+        if (options.motionEnabled) {
+          if (permission === 'granted') {
+            dependencies.recognizer.startCalibration(dependencies.now())
+            dependencies.windowTarget.addEventListener('devicemotion', onMotion)
+            motionListening = true
+          } else {
+            updateStatus({ motion: permission === 'denied' ? 'denied' : 'failed' })
+          }
         }
+        return status
+      })
+      pendingStart = starting
+      const clearPending = () => {
+        if (pendingStart === starting) pendingStart = null
       }
-      return status
+      void starting.then(clearPending, clearPending)
+      return starting
     },
     beginGameplay() {
       dependencies.recognizer.beginGameplay()
     },
-    async stop() {
+    disableMotion() {
       if (motionListening) {
         dependencies.windowTarget.removeEventListener('devicemotion', onMotion)
         motionListening = false
       }
-      if (started) dependencies.documentTarget.removeEventListener('visibilitychange', onVisibilityChange)
+      updateStatus({ motion: 'off' })
+    },
+    async stop() {
+      const stopRun = ++lifecycle
       started = false
+      if (motionListening) {
+        dependencies.windowTarget.removeEventListener('devicemotion', onMotion)
+        motionListening = false
+      }
+      if (visibilityListening) {
+        dependencies.documentTarget.removeEventListener('visibilitychange', onVisibilityChange)
+        visibilityListening = false
+      }
+      updateStatus({ motion: 'off' })
+      const startAtStop = pendingStart
+      if (startAtStop) {
+        try {
+          await startAtStop
+        } catch {
+          // Cleanup still owns resources acquired by a failed start.
+        }
+      }
+      if (lifecycle !== stopRun || started) return
       await dependencies.wakeLock.release()
       dependencies.unlockOrientation()
       await dependencies.audio.dispose()

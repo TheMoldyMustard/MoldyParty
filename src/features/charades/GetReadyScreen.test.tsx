@@ -14,6 +14,7 @@ function controller(status: CharadesDeviceStatus): CharadesDeviceController {
   return {
     start: vi.fn().mockResolvedValue(status),
     beginGameplay: vi.fn(),
+    disableMotion: vi.fn(),
     stop: vi.fn(),
     getStatus: vi.fn().mockReturnValue(status),
     playOutcome: vi.fn(), playAnswer: vi.fn(), playFoul: vi.fn(), playCountdown: vi.fn(),
@@ -70,6 +71,20 @@ describe('Get Ready tilt calibration', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Start Get Ready' })); await Promise.resolve() })
 
     expect(screen.queryByText('3')).not.toBeInTheDocument()
+  })
+
+  it('lets the player continue with taps when the motion stream stays silent', async () => {
+    const session = charadesStore.getState().session!
+    const devices = controller({ motion: 'calibrating-neutral', wake: true, landscape: true })
+    render(<GetReadyScreen session={session} devices={devices} deviceStatus={{ motion: 'calibrating-neutral', wake: true, landscape: true }} onExit={vi.fn()} />)
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Start Get Ready' })); await Promise.resolve() })
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with taps' }))
+
+    expect(devices.disableMotion).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('3')).toBeInTheDocument()
+    await finishCountdown()
+    expect(charadesStore.getState().session?.phase).toBe('ACTIVE')
   })
 
   it.each([true, false])('forwards a recovered session motion preference of %s', async (motionEnabled) => {

@@ -4,7 +4,7 @@
 
 The non-working forehead tilt path was caused by using raw `DeviceOrientationEvent` beta/gamma Euler angles as if one screen-relative axis remained continuous. That assumption breaks around landscape orientation boundaries and varies by browser/device posture. Setting the feature off by default only hid the defect; forcing landscape alone would not repair the sensor math.
 
-The implementation now consumes `devicemotion` events and normalizes `accelerationIncludingGravity` into a physical three-dimensional gravity vector. Guided calibration learns the player's neutral vector and demonstrated **phone face up = Correct** displacement. Gameplay projects subsequent vector displacement onto that learned axis: the demonstrated direction is Correct and its opposite is Pass. The recognizer therefore does not choose between beta and gamma based on portrait or landscape.
+The implementation now consumes `devicemotion` events and normalizes `accelerationIncludingGravity` into a physical three-dimensional gravity vector. Guided calibration learns the player's neutral vector and demonstrated **phone face up = Correct** direction in the tangent plane at neutral. Gameplay measures signed angular displacement along that axis: the demonstrated direction is Correct and its opposite is Pass, including after a full 90° demonstration. The recognizer therefore does not choose between beta and gamma based on portrait or landscape.
 
 Tilt is enabled by default for new sessions, remains selectable in setup, and preserves an explicit tap-only opt-out. Landscape remains scoped to Charades through a best-effort runtime orientation lock; the PWA manifest remains orientation-agnostic so other games are not forced into landscape. Tap controls remain available regardless of permission or sensor support.
 
@@ -16,7 +16,7 @@ Tilt is enabled by default for new sessions, remains selectable in setup, and pr
 4. When permission is granted, the controller listens for `devicemotion` and forwards `accelerationIncludingGravity.x/y/z` plus the current screen angle to `tiltInput.ts`.
 5. `tiltInput.ts` normalizes every valid gravity vector, collects a stable neutral median, learns the demonstrated Correct displacement, requires a return to neutral, then arms gameplay recognition.
 6. Dwell, latch, and neutral re-arm suppress jitter and repeated outcomes. A screen-angle change restarts calibration before gameplay and fails motion closed during gameplay.
-7. Recognized outcomes share the same token-guarded store command as taps. Permission denial, missing/invalid gravity data, calibration failure, and rejected orientation locking do not disable tap play.
+7. Recognized outcomes share the same token-guarded store command as taps. Permission denial, missing/invalid gravity data, calibration failure, and rejected orientation locking do not disable tap play; **Continue with taps** lets a player escape a silent or stalled sensor stream.
 
 ## Dependency and risk map
 
