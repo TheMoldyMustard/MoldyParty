@@ -1,6 +1,6 @@
 # MoldyParty
 
-MoldyParty is an offline-first, installable pass-the-device party collection. **Impostor** privately assigns roles and guides voting; **Forehead Charades** turns the same device and word library into a fast, tilt-or-tap guessing game; and **Category Bomb** challenges a group to name valid items before a hidden fuse runs out. None of the games requires accounts, a server, or a network connection after the first production load.
+MoldyParty is an offline-first, installable pass-the-device party collection. **Impostor** privately assigns roles and guides voting; **Forehead Charades** turns the same device and word library into a fast, tilt-or-tap guessing game; **Category Bomb** challenges a group to name valid items before a hidden fuse runs out; and **Name Roulette** spins an editable wheel to pick one person. None of the activities requires accounts, a server, or a network connection after the first production load.
 
 ## Run locally
 
@@ -32,6 +32,12 @@ The service worker is generated only for production builds. Browser install prom
 Install Playwright's browser once on a new machine with `npx playwright install chromium`.
 
 ## How the game works
+
+### Name Roulette
+
+1. Open **Name Roulette** and enter 2–50 unique names, or choose an existing Impostor, Forehead Charades, or Category Bomb session and copy its player roster onto the wheel.
+2. Edit the copied names if needed, then press **Spin the wheel**. The wheel preselects one name uniformly, rotates to that sector, and displays the full winner name.
+3. Select **Spin again** to reuse the same roster. Returning to MoldyParty or reloading clears the roulette draft and result; importing a session is a one-time copy and never changes the saved session.
 
 ### Category Bomb
 
@@ -70,6 +76,8 @@ The current round, deadline, teams, and no-repeat history are stored locally, so
 ## Local sessions and statistics
 
 Clicking **Impostor**, **Category Bomb**, or **Forehead Charades** opens that game's local session manager. Click a saved-session card to continue it. Each card also has quick icons to rename the session, inspect its statistics table, or permanently delete it after confirmation. Renaming changes only the session label; the stable player roster and its statistics stay attached to the same people. Sessions are stored only in the current browser profile.
+
+Name Roulette can read those saved rosters as picker options. Choosing one copies its names into the transient roulette draft; it does not continue, edit, or link the source session.
 
 After a completed round, **Change category** returns directly to the category picker and keeps the current session active. **Return to sessions** leaves the round setup and opens the saved-session manager.
 
@@ -131,4 +139,4 @@ Supported categories are `person`, `place`, `object`, `animal`, `food`, `pop-cul
 
 ## Offline and privacy notes
 
-MoldyParty does not transmit gameplay, sensor readings, session statistics, or custom-pack data. Charades motion events are interpreted only in the browser and are not recorded. Role reveals, ballots, and unfinished Outlier guesses are remasked after privacy is lost or a saved round is restored. Clearing browser storage, using private browsing, deleting a session, or uninstalling with site-data removal can erase local session stats, packs, no-repeat history, and in-progress rounds, so export important packs as JSON. The first visit must be online; subsequent production-build visits can load any game and saved packs from the service worker cache.
+MoldyParty does not transmit gameplay, entered roulette names, sensor readings, session statistics, or custom-pack data. Roulette drafts remain only in the current screen and are not persisted. Charades motion events are interpreted only in the browser and are not recorded. Role reveals, ballots, and unfinished Outlier guesses are remasked after privacy is lost or a saved round is restored. Clearing browser storage, using private browsing, deleting a session, or uninstalling with site-data removal can erase local session stats, packs, no-repeat history, and in-progress rounds, so export important packs as JSON. The first visit must be online; subsequent production-build visits can load any game and saved packs from the service worker cache.

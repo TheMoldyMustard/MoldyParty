@@ -21,8 +21,10 @@ import CategoryBombGame from './features/category-bomb/CategoryBombGame'
 import CategoryBombSessionManagerScreen from './features/category-bomb/CategoryBombSessionManagerScreen'
 import { categoryBombStore, useCategoryBombStore } from './store/categoryBombStore'
 import type { CategoryBombTurnPolicy } from './domain/categoryBomb'
+import RouletteScreen from './features/roulette/RouletteScreen'
+import { createRouletteRosterOptions } from './features/roulette/sessionRosters'
 
-type AppView = 'home' | 'sessions' | 'lobby' | 'packs' | 'charades-sessions' | 'charades' | 'charades-packs' | 'category-bomb-sessions' | 'category-bomb'
+type AppView = 'home' | 'sessions' | 'lobby' | 'packs' | 'charades-sessions' | 'charades' | 'charades-packs' | 'category-bomb-sessions' | 'category-bomb' | 'roulette'
 type CategoryBombDraft = {
   playerNames: string[]
   turnPolicy: CategoryBombTurnPolicy
@@ -47,6 +49,7 @@ function AppContent() {
   const createSession = useGameStore((state) => state.createSession)
   const continueSession = useGameStore((state) => state.continueSession)
   const activeSessionId = useGameStore((state) => state.activeSessionId)
+  const impostorSessions = useGameStore((state) => state.sessionsById)
   const charadesSession = useCharadesStore((state) => state.session)
   const charadesSessions = useCharadesStore((state) => state.sessionsById)
   const charadesSessionId = useCharadesStore((state) => state.activeSessionId)
@@ -61,6 +64,11 @@ function AppContent() {
   const activeCategoryBombSession = categoryBombSessionId ? categoryBombSessions[categoryBombSessionId] : null
   const explicitActiveGame = useAppStore((state) => state.activeGameId)
   const activeGame = resolveActiveGame(explicitActiveGame, game !== null, charadesSession !== null, categoryBombRound !== null)
+  const rouletteRosterOptions = createRouletteRosterOptions([
+    { gameId: 'impostor', gameLabel: 'Impostor', sessions: impostorSessions },
+    { gameId: 'charades', gameLabel: 'Forehead Charades', sessions: charadesSessions },
+    { gameId: 'category-bomb', gameLabel: 'Category Bomb', sessions: categoryBombSessions },
+  ])
 
   useEffect(() => {
     if (view !== 'home') return
@@ -113,6 +121,8 @@ function AppContent() {
     {activeGameScreen}
     <AbortGameDialog onConfirm={() => { abortGame(); setView('sessions') }} />
   </>
+
+  if (view === 'roulette') return <RouletteScreen rosterOptions={rouletteRosterOptions} onBack={() => setView('home')} />
 
   if (view === 'sessions') return <SessionManagerScreen
     onBack={() => { appStore.getState().setActiveGame(null); setView('home') }}
@@ -234,6 +244,16 @@ function AppContent() {
           <h2 id="category-bomb-title">Category Bomb</h2>
           <p>Name it, tap it, and pass before the hidden timer explodes.</p>
           <button type="button" onClick={() => { setCategoryBombDraft(null); appStore.getState().setActiveGame('category-bomb'); setView('category-bomb-sessions') }}>Open Category Bomb <span aria-hidden="true">→</span></button>
+        </div>
+      </section>
+
+      <section className="game-card game-card--roulette" aria-labelledby="roulette-title">
+        <div className="game-card__art" aria-hidden="true"><span className="game-card__eye">◌</span></div>
+        <div className="game-card__content">
+          <span className="pill">Quick picker</span>
+          <h2 id="roulette-title">Name Roulette</h2>
+          <p>Add names or borrow a saved session, then let the wheel choose.</p>
+          <button type="button" onClick={() => setView('roulette')}>Open Name Roulette <span aria-hidden="true">→</span></button>
         </div>
       </section>
 

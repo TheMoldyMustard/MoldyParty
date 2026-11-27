@@ -55,9 +55,38 @@ describe('MoldyParty app shell', () => {
     expect(screen.getByRole('heading', { name: 'MoldyParty', level: 1 })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Impostor', level: 2 })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Category Bomb', level: 2 })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Name Roulette', level: 2 })).toBeInTheDocument()
     expect(screen.getByText(/find the impostors before they blend in/i)).toBeInTheDocument()
     expect(screen.getByText(/offline party games/i)).toBeInTheDocument()
     expect(screen.queryByText('Pass it. Bluff it. Find them.')).not.toBeInTheDocument()
+  })
+
+  it('opens Name Roulette and returns to the MoldyParty home screen', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Open Name Roulette' }))
+    expect(screen.getByRole('heading', { name: 'Name Roulette', level: 1 })).toBeInTheDocument()
+    expect(screen.getAllByRole('textbox')).toHaveLength(2)
+
+    await user.click(screen.getByRole('button', { name: '← MoldyParty' }))
+    expect(screen.getByRole('heading', { name: 'MoldyParty', level: 1 })).toBeInTheDocument()
+  })
+
+  it('copies names from a saved game session into Name Roulette without changing the session', async () => {
+    gameStore.getState().createSession('Friday Crew')
+    gameStore.getState().startGame(setup)
+    gameStore.getState().returnToLobby()
+    const sessionBefore = gameStore.getState().sessionsById
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: 'Open Name Roulette' }))
+    await user.selectOptions(screen.getByLabelText('Saved session roster'), screen.getByRole('option', { name: 'Impostor · Friday Crew' }))
+    await user.click(screen.getByRole('button', { name: 'Use session names' }))
+
+    expect(screen.getAllByRole('textbox').map((input) => (input as HTMLInputElement).value)).toEqual(['Alex', 'Blair', 'Casey'])
+    expect(gameStore.getState().sessionsById).toEqual(sessionBefore)
   })
 
   it('shows only the useful session action when no sessions exist', async () => {
