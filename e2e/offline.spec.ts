@@ -78,3 +78,19 @@ test('an active Category Bomb game recovers after an offline reload', async ({ p
   await expect(page.getByTestId('category-bomb-arrow')).toBeVisible()
   await expect(page.getByRole('button', { name: /Accept .* answer and pass/ })).toBeVisible()
 })
+
+test('Name Roulette can pick a winner after an offline reload', async ({ page, context }) => {
+  await page.goto('/')
+  await page.evaluate(async () => { await navigator.serviceWorker.ready })
+  await page.reload()
+  await context.setOffline(true)
+  await page.reload()
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+
+  await page.getByRole('button', { name: 'Open Name Roulette' }).click()
+  await page.getByLabel('Name 1').fill('Alex')
+  await page.getByLabel('Name 2').fill('Blair')
+  await page.getByRole('button', { name: 'Spin the wheel' }).click()
+
+  await expect(page.getByRole('heading', { name: /^(Alex|Blair) wins!$/ })).toBeVisible()
+})
